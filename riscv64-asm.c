@@ -152,6 +152,12 @@ static void asm_nullary_opcode(TCCState *s1, int token)
         asm_emit_opcode((0x1C << 2) | 3 | (0x105 << 20));
         return;
 
+    /* Pseudoinstructions */
+    case TOK_ASM_ret:
+        /* jalr zero, x1, 0 */
+        asm_emit_opcode( 0x67 | (0 << 12) | ENCODE_RS1(1) );
+        return;
+
     /* C extension */
     case TOK_ASM_c_ebreak:
         asm_emit_cr(token, 2 | (9 << 12), &nil, &nil);
@@ -265,7 +271,8 @@ static void asm_unary_opcode(TCCState *s1, int token)
 {
     uint32_t opcode = (0x1C << 2) | 3 | (2 << 12);
     Operand op;
-    static const Operand nil = {.type = OP_REG};
+    static const Operand zero = {.type = OP_REG};
+    static const Operand zimm = {.type = OP_IM12S};
 
     parse_operands(s1, &op, 1);
     /* Note: Those all map to CSR--so they are pseudo-instructions. */
@@ -291,6 +298,26 @@ static void asm_unary_opcode(TCCState *s1, int token)
     case TOK_ASM_rdinstreth:
         asm_emit_opcode(opcode | (0xC82 << 20) | ENCODE_RD(op.reg));
         return;
+
+    case TOK_ASM_jr:
+        /* jalr zero, 0(rs)*/
+        asm_emit_i(token, 0x67 | (0 << 12), &zero, &op, &zimm);
+        return;
+    case TOK_ASM_call:
+        /* auipc ra, 0 */
+        greloca(cur_text_section, op.e.sym, ind, R_RISCV_CALL, 0);
+        asm_emit_opcode(3 | (5 << 2) | ENCODE_RD(1));
+        /* jalr zero, 0(ra) */
+        asm_emit_opcode(0x67 | (0 << 12) | ENCODE_RS1(1));
+        return;
+    case TOK_ASM_tail:
+        /* auipc x6, 0 */
+        greloca(cur_text_section, op.e.sym, ind, R_RISCV_CALL, 0);
+        asm_emit_opcode(3 | (5 << 2) | ENCODE_RD(6));
+        /* jalr zero, 0(x6) */
+        asm_emit_opcode(0x67 | (0 << 12) | ENCODE_RS1(6));
+        return;
+
     /* C extension */
     case TOK_ASM_c_j:
         asm_emit_cj(token, 1 | (5 << 13), &op);
@@ -299,10 +326,10 @@ static void asm_unary_opcode(TCCState *s1, int token)
         asm_emit_cj(token, 1 | (1 << 13), &op);
         return;
     case TOK_ASM_c_jalr:
-        asm_emit_cr(token, 2 | (9 << 12), &op, &nil);
+        asm_emit_cr(token, 2 | (9 << 12), &op, &zero);
         return;
     case TOK_ASM_c_jr:
-        asm_emit_cr(token, 2 | (8 << 12), &op, &nil);
+        asm_emit_cr(token, 2 | (8 << 12), &op, &zero);
         return;
     default:
         expect("unary instruction");
@@ -331,6 +358,8 @@ static void asm_emit_u(int token, uint32_t opcode, const Operand* rd, const Oper
 
 static void asm_binary_opcode(TCCState* s1, int token)
 {
+    static const Operand zero = {.type = OP_REG, .reg = 0};
+    Operand imm = {.type = OP_IM12S, .e = {.v = 0}};
     Operand ops[2];
     parse_operands(s1, &ops[0], 2);
 
@@ -452,6 +481,110 @@ static void asm_binary_opcode(TCCState* s1, int token)
         /* addi rd, rd, 0 */
         asm_emit_i(token, 3 | (4 << 2), ops, ops, ops + 1);
         return;
+    case TOK_ASM_li:
+        if(ops[1].type != OP_IM32 && ops[1].type != OP_IM12S){
+            tcc_error("'%s': Expected first source operand that is an immediate value between 0 and 0xFFFFFFFFFFFFFFFF", get_tok_str(token, NULL));
+        }
+        int32_t lo = ops[1].e.v;
+        uint32_t hi = (int64_t)ops[1].e.v >> 32;
+        if(lo < 0){
+            hi += 1;
+        }
+        imm.e.v = ((hi + 0x800) & 0xfffff000) >> 12;
+        /* lui rd, HI_20(HI_32(imm)) */
+        asm_emit_u(token, (0xD << 2) | 3, &ops[0], &imm);
+        /* addi rd, rd, LO_12(HI_32(imm)) */
+        imm.e.v = (int32_t)hi<<20>>20;
+        asm_emit_i(token, 3 | (4 << 2), &ops[0], &ops[0], &imm);
+        /* slli rd, rd, 12 */
+        imm.e.v = 12;
+        asm_emit_i(token, (4 << 2) | 3 | (1 << 12), &ops[0], &ops[0], &imm);
+        /* addi rd, rd, HI_12(LO_32(imm)) */
+        imm.e.v = (lo + (1<<19)) >> 20;
+        asm_emit_i(token, 3 | (4 << 2), &ops[0], &ops[0], &imm);
+        /* slli rd, rd, 12 */
+        imm.e.v = 12;
+        asm_emit_i(token, (4 << 2) | 3 | (1 << 12), &ops[0], &ops[0], &imm);
+        /* addi rd, rd, HI_12(LO_20(LO_32imm)) */
+        lo = lo << 12 >> 12;
+        imm.e.v = lo >> 8;
+        asm_emit_i(token, 3 | (4 << 2), &ops[0], &ops[0], &imm);
+        /* slli rd, rd,  8 */
+        imm.e.v = 8;
+        asm_emit_i(token, (4 << 2) | 3 | (1 << 12), &ops[0], &ops[0], &imm);
+        /* addi rd, rd, LO_8(LO_20(LO_32imm)) */
+        lo &= 0xff;
+        imm.e.v = lo << 20 >> 20;
+        asm_emit_i(token, 3 | (4 << 2), &ops[0], &ops[0], &imm);
+        return;
+    case TOK_ASM_mv:
+        /* addi rd, rs, 0 */
+        asm_emit_i(token, 3 | (4 << 2), &ops[0], &ops[1], &imm);
+        return;
+    case TOK_ASM_not:
+        /* xori rd, rs, -1 */
+        imm.e.v = -1;
+        asm_emit_i(token, (0x4 << 2) | 3 | (4 << 12), &ops[0], &ops[1], &imm);
+        return;
+    case TOK_ASM_neg:
+        /* sub rd, x0, rs */
+        imm.e.v = 1;
+        asm_emit_i(token, (0x4 << 2) | 3 | (4 << 12), &ops[0], &zero, &imm);
+        return;
+    case TOK_ASM_negw:
+        /* sub rd, x0, rs */
+        imm.e.v = 1;
+        asm_emit_i(token, (0x4 << 2) | 3 | (4 << 12), &ops[0], &zero, &imm);
+        return;
+    case TOK_ASM_jump:
+        /* auipc x5, 0 */
+        asm_emit_opcode(3 | (5 << 2) | ENCODE_RD(5));
+        greloca(cur_text_section, ops->e.sym, ind, R_RISCV_CALL, 0);
+        /* jalr zero, 0(x5) */
+        asm_emit_opcode(0x67 | (0 << 12) | ENCODE_RS1(5));
+        return;
+    case TOK_ASM_seqz:
+        /* sltiu rd, rs, 1 */
+        imm.e.v = 1;
+        asm_emit_i(token, (0x4 << 2) | 3 | (3 << 12), &ops[0], &ops[1], &imm);
+        return;
+    case TOK_ASM_snez:
+        /* sltu rd, zero, rs */
+        imm.e.v = 1;
+        asm_emit_r(token, (0xC << 2) | 3 | (3 << 12), &ops[0], &zero, &ops[1]);
+        return;
+    case TOK_ASM_sltz:
+        /* slt rd, rs, zero */
+        asm_emit_r(token, (0xC << 2) | 3 | (2 << 12), &ops[0], &ops[1], &zero);
+        return;
+    case TOK_ASM_sgtz:
+        /* slt rd, zero, rs */
+        asm_emit_r(token, (0xC << 2) | 3 | (2 << 12), &ops[0], &zero, &ops[1]);
+        return;
+    case TOK_ASM_bnez:
+        /* bne rs, zero, offset */
+        asm_emit_b(token, 0x63 | (1 << 12), &ops[0], &zero, &ops[1]);
+        return;
+    case TOK_ASM_beqz:
+        /* bne rs, zero, offset */
+        asm_emit_b(token, 0x63 | (0 << 12), &ops[0], &zero, &ops[1]);
+        return;
+    case TOK_ASM_blez:
+        /* bge rs, zero, offset */
+        asm_emit_b(token, 0x63 | (5 << 12), &ops[0], &zero, &ops[1]);
+        return;
+    case TOK_ASM_bgez:
+        /* bge zero, rs, offset */
+        asm_emit_b(token, 0x63 | (5 << 12), &zero, &ops[0], &ops[1]);
+        return;
+    case TOK_ASM_bltz:
+        /* blt rs, zero, offset */
+        asm_emit_b(token, 0x63 | (4 << 12), &ops[0], &zero, &ops[1]);
+        return;
+    case TOK_ASM_bgtz:
+        /* blt zero, rs, offset */
+        asm_emit_b(token, 0x63 | (4 << 12), &zero, &ops[0], &ops[1]);
+        return;
 
     default:
         expect("binary instruction");
@@ -549,8 +682,23 @@ static void asm_mem_access_opcode(TCCState *s1, int token)
     Operand ops[3];
     parse_mem_access_operands(s1, &ops[0]);
 
-    // l{b|h|w|d}[u] rd, imm(rs1); I-format
+    /* Pseudoinstruction: inst reg, label
+     * expand to:
+     *   auipc reg, 0
+     *   inst reg, 0(reg)
+     * And with the proper relocation to label
+     */
+    if (ops[1].type == OP_IM32 && ops[1].e.sym && ops[1].e.sym->type.t & VT_STATIC){
+        ops[1] = ops[0];
+        /* set the offset to zero */
+        ops[2].type = OP_IM12S;
+        ops[2].e.v  = 0;
+        /* auipc reg, 0 */
+        asm_emit_u(token, (0x05 << 2) | 3, &ops[0], &ops[2]);
+    }
+
     switch (token) {
+    // l{b|h|w|d}[u] rd, imm(rs1); I-format
     case TOK_ASM_lb:
          asm_emit_i(token, (0x0 << 2) | 3, &ops[0], &ops[1], &ops[2]);
          return;
@@ -712,6 +860,19 @@ static void asm_ternary_opcode(TCCState *s1, int token)
         return;
     case TOK_ASM_bgeu:
         asm_emit_b(token, 0x63 | (7 << 12), ops, ops + 1, ops + 2);
+        return;
+    /* related pseudoinstructions */
+    case TOK_ASM_bgt:
+        asm_emit_b(token, 0x63 | (4 << 12), ops + 1, ops, ops + 2);
+        return;
+    case TOK_ASM_ble:
+        asm_emit_b(token, 0x63 | (5 << 12), ops + 1, ops, ops + 2);
+        return;
+    case TOK_ASM_bgtu:
+        asm_emit_b(token, 0x63 | (6 << 12), ops + 1, ops, ops + 2);
+        return;
+    case TOK_ASM_bleu:
+        asm_emit_b(token, 0x63 | (7 << 12), ops + 1, ops, ops + 2);
         return;
 
     /* M extension */
@@ -1030,12 +1191,42 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
 
     /* pseudoinstructions */
     case TOK_ASM_nop:
+    case TOK_ASM_ret:
         asm_nullary_opcode(s1, token);
+        return;
+
+    case TOK_ASM_jr:
+    case TOK_ASM_call:
+    case TOK_ASM_tail:
+        asm_unary_opcode(s1, token);
         return;
 
     case TOK_ASM_la:
     case TOK_ASM_lla:
+    case TOK_ASM_li:
+    case TOK_ASM_jump:
+    case TOK_ASM_seqz:
+    case TOK_ASM_snez:
+    case TOK_ASM_sltz:
+    case TOK_ASM_sgtz:
+    case TOK_ASM_bnez:
+    case TOK_ASM_beqz:
+    case TOK_ASM_blez:
+    case TOK_ASM_bgez:
+    case TOK_ASM_bltz:
+    case TOK_ASM_bgtz:
+    case TOK_ASM_mv:
+    case TOK_ASM_not:
+    case TOK_ASM_neg:
+    case TOK_ASM_negw:
         asm_binary_opcode(s1, token);
+        return;
+
+    case TOK_ASM_bgt:
+    case TOK_ASM_bgtu:
+    case TOK_ASM_ble:
+    case TOK_ASM_bleu:
+        asm_ternary_opcode(s1, token);
         return;
 
     default:

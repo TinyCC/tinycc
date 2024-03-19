@@ -393,6 +393,8 @@
  DEF_ASM(fsd)
  DEF_ASM(fsw)
  DEF_ASM(j)
+ DEF_ASM(jump)
+ DEF_ASM(jr)
  DEF_ASM(la)
  DEF_ASM(li)
  DEF_ASM(lla)
