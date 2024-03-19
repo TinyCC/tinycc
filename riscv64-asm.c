@@ -63,6 +63,7 @@ static void asm_unary_opcode(TCCState *s1, int token);
 ST_FUNC void gen_expr32(ExprValue *pe);
 static void parse_operand(TCCState *s1, Operand *op);
 static void parse_operands(TCCState *s1, Operand *ops, int count);
+static void parse_mem_access_operands(TCCState *s1, Operand* ops);
 ST_FUNC void subst_asm_operand(CString *add_str, SValue *sv, int modifier);
 /* C extension */
 static void asm_emit_ca(int token, uint16_t opcode, const Operand *rd, const Operand *rs2);
@@ -220,6 +221,43 @@ static void parse_operands(TCCState *s1, Operand* ops, int count){
                 expect("','");
         }
         parse_operand(s1, &ops[i]);
+    }
+}
+
+/* parse `X, imm(Y)` to {X, Y, imm} operands */
+static void parse_mem_access_operands(TCCState *s1, Operand* ops){
+    static const Operand zimm = {.type = OP_IM12S};
+
+    Operand op;
+    int i;
+
+    parse_operand(s1, &ops[0]);
+    if ( tok == ',')
+        next();
+    else
+        expect("','");
+
+    if ( tok == '(') {
+        /* `X, (Y)` case*/
+        next();
+        parse_operand(s1, &ops[1]);
+        if ( tok == ')') next(); else expect("')'");
+        ops[2] = zimm;
+    } else {
+        parse_operand(s1, &ops[2]);
+        if ( tok == '('){
+            /* `X, imm(Y)` case*/
+            next();
+            parse_operand(s1, &ops[1]);
+            if ( tok == ')') next(); else expect("')'");
+        } else {
+            /* `X, Y` case*/
+            /* we parsed Y thinking it was imm, swap and default imm to zero */
+            op = ops[2];
+            ops[1] = ops[2];
+            ops[2] = op;
+            ops[2] = zimm;
+        }
     }
 }
 
@@ -505,6 +543,52 @@ static void asm_emit_j(int token, uint32_t opcode, const Operand* rd, const Oper
     gen_le32(opcode | ENCODE_RD(rd->reg) | (((imm >> 20) & 1) << 31) | (((imm >> 1) & 0x3ff) << 21) | (((imm >> 11) & 1) << 20) | (((imm >> 12) & 0xff) << 12));
 }
 
+static void asm_mem_access_opcode(TCCState *s1, int token)
+{
+
+    Operand ops[3];
+    parse_mem_access_operands(s1, &ops[0]);
+
+    // l{b|h|w|d}[u] rd, imm(rs1); I-format
+    switch (token) {
+    case TOK_ASM_lb:
+         asm_emit_i(token, (0x0 << 2) | 3, &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_lh:
+         asm_emit_i(token, (0x0 << 2) | 3 | (1 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_lw:
+         asm_emit_i(token, (0x0 << 2) | 3 | (2 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_ld:
+         asm_emit_i(token, (0x0 << 2) | 3 | (3 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_lbu:
+         asm_emit_i(token, (0x0 << 2) | 3 | (4 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_lhu:
+         asm_emit_i(token, (0x0 << 2) | 3 | (5 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+    case TOK_ASM_lwu:
+         asm_emit_i(token, (0x0 << 2) | 3 | (6 << 12), &ops[0], &ops[1], &ops[2]);
+         return;
+
+    // s{b|h|w|d} rs2, imm(rs1); S-format (with rsX swapped)
+    case TOK_ASM_sb:
+         asm_emit_s(token, (0x8 << 2) | 3 | (0 << 12), &ops[1], &ops[0], &ops[2]);
+         return;
+    case TOK_ASM_sh:
+         asm_emit_s(token, (0x8 << 2) | 3 | (1 << 12), &ops[1], &ops[0], &ops[2]);
+         return;
+    case TOK_ASM_sw:
+         asm_emit_s(token, (0x8 << 2) | 3 | (2 << 12), &ops[1], &ops[0], &ops[2]);
+         return;
+    case TOK_ASM_sd:
+         asm_emit_s(token, (0x8 << 2) | 3 | (3 << 12), &ops[1], &ops[0], &ops[2]);
+         return;
+    }
+}
+
 static void asm_ternary_opcode(TCCState *s1, int token)
 {
     Operand ops[3];
@@ -629,46 +713,6 @@ static void asm_ternary_opcode(TCCState *s1, int token)
     case TOK_ASM_bgeu:
         asm_emit_b(token, 0x63 | (7 << 12), ops, ops + 1, ops + 2);
         return;
-
-    // Loads (RD,RS1,I); I-format
-
-    case TOK_ASM_lb:
-         asm_emit_i(token, (0x0 << 2) | 3, &ops[0], &ops[1], &ops[2]);
-         return;
-    case TOK_ASM_lh:
-         asm_emit_i(token, (0x0 << 2) | 3 | (1 << 12), &ops[0], &ops[1], &ops[2]);
-         return;
-    case TOK_ASM_lw:
-         asm_emit_i(token, (0x0 << 2) | 3 | (2 << 12), &ops[0], &ops[1], &ops[2]);
-         return;
-    case TOK_ASM_lbu:
-         asm_emit_i(token, (0x0 << 2) | 3 | (4 << 12), &ops[0], &ops[1], &ops[2]);
-         return;
-    case TOK_ASM_lhu:
-         asm_emit_i(token, (0x0 << 2) | 3 | (5 << 12), &ops[0], &ops[1], &ops[2]);
-         return;
-    // 64 bit
-    case TOK_ASM_ld:
-         asm_emit_i(token, (0x0 << 2) | 3 | (3 << 12), &ops[0], &ops[1], &ops[2]);
-         return;
-    case TOK_ASM_lwu:
-         asm_emit_i(token, (0x0 << 2) | 3 | (6 << 12), &ops[0], &ops[1], &ops[2]);
-         return;
-
-    // Stores (RS1,RS2,I); S-format
-
-    case TOK_ASM_sb:
-         asm_emit_s(token, (0x8 << 2) | 3 | (0 << 12), &ops[0], &ops[1], &ops[2]);
-         return;
-   case TOK_ASM_sh:
-         asm_emit_s(token, (0x8 << 2) | 3 | (1 << 12), &ops[0], &ops[1], &ops[2]);
-         return;
-    case TOK_ASM_sw:
-         asm_emit_s(token, (0x8 << 2) | 3 | (2 << 12), &ops[0], &ops[1], &ops[2]);
-         return;
-    case TOK_ASM_sd:
-         asm_emit_s(token, (0x8 << 2) | 3 | (3 << 12), &ops[0], &ops[1], &ops[2]);
-         return;
 
     /* M extension */
     case TOK_ASM_div:
@@ -856,6 +900,20 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
         asm_binary_opcode(s1, token);
         return;
 
+    case TOK_ASM_lb:
+    case TOK_ASM_lh:
+    case TOK_ASM_lw:
+    case TOK_ASM_ld:
+    case TOK_ASM_lbu:
+    case TOK_ASM_lhu:
+    case TOK_ASM_lwu:
+    case TOK_ASM_sb:
+    case TOK_ASM_sh:
+    case TOK_ASM_sw:
+    case TOK_ASM_sd:
+        asm_mem_access_opcode(s1, token);
+        break;
+
     case TOK_ASM_add:
     case TOK_ASM_addi:
     case TOK_ASM_addiw:
@@ -869,18 +927,8 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_bltu:
     case TOK_ASM_bne:
     case TOK_ASM_jalr:
-    case TOK_ASM_lb:
-    case TOK_ASM_lbu:
-    case TOK_ASM_ld:
-    case TOK_ASM_lh:
-    case TOK_ASM_lhu:
-    case TOK_ASM_lw:
-    case TOK_ASM_lwu:
     case TOK_ASM_or:
     case TOK_ASM_ori:
-    case TOK_ASM_sb:
-    case TOK_ASM_sd:
-    case TOK_ASM_sh:
     case TOK_ASM_sll:
     case TOK_ASM_slli:
     case TOK_ASM_slliw:
@@ -899,7 +947,6 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_srlw:
     case TOK_ASM_sub:
     case TOK_ASM_subw:
-    case TOK_ASM_sw:
     case TOK_ASM_xor:
     case TOK_ASM_xori:
     /* M extension */
