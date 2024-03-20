@@ -202,7 +202,8 @@
 /* pragma */
      DEF(TOK_pack, "pack")
 #if !defined(TCC_TARGET_I386) && !defined(TCC_TARGET_X86_64) && \
-    !defined(TCC_TARGET_ARM) && !defined(TCC_TARGET_ARM64)
+    !defined(TCC_TARGET_ARM) && !defined(TCC_TARGET_ARM64) && \
+    !defined(TCC_TARGET_RISCV64)
      /* already defined for assembler */
      DEF(TOK_ASM_push, "push")
      DEF(TOK_ASM_pop, "pop")
@@ -401,6 +402,8 @@
  DEF_ASMDIR(code32)
 #elif defined(TCC_TARGET_X86_64)
  DEF_ASMDIR(code64)
+#elif defined(TCC_TARGET_RISCV64)
+ DEF_ASMDIR(option)
 #endif
  DEF_ASMDIR(short)
  DEF_ASMDIR(long)
