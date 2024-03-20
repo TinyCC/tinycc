@@ -267,6 +267,26 @@ static void parse_mem_access_operands(TCCState *s1, Operand* ops){
     }
 }
 
+/* This is special: First operand is optional */
+static void asm_jal_opcode(TCCState *s1, int token){
+    static const Operand ra = {.type = OP_REG, .reg = 1};
+    Operand ops[2];
+    parse_operand(s1, &ops[0]);
+    if ( tok == ',')
+        next();
+    else {
+        /* no more operands, it's the pseudoinstruction:
+         *  jal rs
+         * Expand to:
+         *  jal ra, rs
+         */
+        asm_emit_j(token, 0x6f, &ra, &ops[0]);
+        return;
+    }
+    parse_operand(s1, &ops[1]);
+    asm_emit_j(token, 0x6f, &ops[0], &ops[1]);
+}
+
 /* This is special: It can be a pseudointruction or a instruction */
 static void asm_jalr_opcode(TCCState *s1, int token){
     static const Operand zimm = {.type = OP_IM12S};
@@ -417,9 +437,6 @@ static void asm_binary_opcode(TCCState* s1, int token)
         return;
     case TOK_ASM_auipc:
         asm_emit_u(token, (0x05 << 2) | 3, &ops[0], &ops[1]);
-        return;
-    case TOK_ASM_jal:
-        asm_emit_j(token, 0x6f, ops, ops + 1);
         return;
 
     /* C extension */
@@ -1100,7 +1117,6 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
 
     case TOK_ASM_lui:
     case TOK_ASM_auipc:
-    case TOK_ASM_jal:
         asm_binary_opcode(s1, token);
         return;
 
@@ -1120,6 +1136,9 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
 
     case TOK_ASM_jalr:
         asm_jalr_opcode(s1, token); /* it can be a pseudo instruction too*/
+        break;
+    case TOK_ASM_jal:
+        asm_jal_opcode(s1, token); /* it can be a pseudo instruction too*/
         break;
 
     case TOK_ASM_add:
