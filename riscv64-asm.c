@@ -267,6 +267,54 @@ static void parse_mem_access_operands(TCCState *s1, Operand* ops){
     }
 }
 
+/* This is special: It can be a pseudointruction or a instruction */
+static void asm_jalr_opcode(TCCState *s1, int token){
+    static const Operand zimm = {.type = OP_IM12S};
+    static const Operand ra = {.type = OP_REG, .reg = 1};
+    Operand ops[3];
+    Operand op;
+    int i;
+
+    parse_operand(s1, &ops[0]);
+    if ( tok == ',')
+        next();
+    else {
+        /* no more operands, it's the pseudoinstruction:
+         *  jalr rs
+         * Expand to:
+         *  jalr ra, 0(rs)
+         */
+        asm_emit_i(token, 0x67 | (0 << 12), &ra, &ops[0], &zimm);
+        return;
+    }
+
+    if ( tok == '(') {
+        /* `X, (Y)` case*/
+        next();
+        parse_operand(s1, &ops[1]);
+        if ( tok == ')') next(); else expect("')'");
+        ops[2] = zimm;
+    } else {
+        parse_operand(s1, &ops[2]);
+        if ( tok == '('){
+            /* `X, imm(Y)` case*/
+            next();
+            parse_operand(s1, &ops[1]);
+            if ( tok == ')') next(); else expect("')'");
+        } else {
+            /* `X, Y` case*/
+            /* we parsed Y thinking it was imm, swap and default imm to zero */
+            op = ops[2];
+            ops[1] = ops[2];
+            ops[2] = op;
+            ops[2] = zimm;
+        }
+    }
+    /* jalr(RD, RS1, IMM); I-format */
+    asm_emit_i(token, 0x67 | (0 << 12), &ops[0], &ops[1], &ops[2]);
+}
+
+
 static void asm_unary_opcode(TCCState *s1, int token)
 {
     uint32_t opcode = (0x1C << 2) | 3 | (2 << 12);
@@ -837,11 +885,6 @@ static void asm_ternary_opcode(TCCState *s1, int token)
          asm_emit_i(token, (0x4 << 2) | 3 | (3 << 12), &ops[0], &ops[1], &ops[2]);
          return;
 
-    /* indirect jump (RD, RS1, IMM); I-format */
-    case TOK_ASM_jalr:
-        asm_emit_i(token, 0x67 | (0 << 12), ops, ops + 1, ops + 2);
-        return;
-
     /* branch (RS1, RS2, IMM); B-format */
     case TOK_ASM_beq:
         asm_emit_b(token, 0x63 | (0 << 12), ops, ops + 1, ops + 2);
@@ -1075,6 +1118,10 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
         asm_mem_access_opcode(s1, token);
         break;
 
+    case TOK_ASM_jalr:
+        asm_jalr_opcode(s1, token); /* it can be a pseudo instruction too*/
+        break;
+
     case TOK_ASM_add:
     case TOK_ASM_addi:
     case TOK_ASM_addiw:
@@ -1087,7 +1134,6 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_blt:
     case TOK_ASM_bltu:
     case TOK_ASM_bne:
-    case TOK_ASM_jalr:
     case TOK_ASM_or:
     case TOK_ASM_ori:
     case TOK_ASM_sll:
