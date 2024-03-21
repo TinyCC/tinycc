@@ -107,7 +107,7 @@ union float_long {
 };
 
 /* XXX: we don't support several builtin supports for now */
-#if !defined __x86_64__ && !defined __arm__
+#if !defined __x86_64__ && !defined __arm__ && !defined __riscv
 
 /* XXX: use gcc/tcc intrinsic ? */
 #if defined __i386__
