@@ -53,6 +53,8 @@ static int pp_debug_tok, pp_debug_symv;
 static int pp_counter;
 static void tok_print(const int *str, const char *msg, ...);
 static void next_nomacro(void);
+static void parse_number(const char *p);
+static void parse_string(const char *p, int len);
 
 static struct TinyAlloc *toksym_alloc;
 static struct TinyAlloc *tokstr_alloc;
@@ -884,7 +886,6 @@ redo_start:
     start_of_line = 1;
     in_warn_or_error = 0;
     for(;;) {
-    redo_no_start:
         c = *p;
         switch(c) {
         case ' ':
@@ -893,7 +894,7 @@ redo_start:
         case '\v':
         case '\r':
             p++;
-            goto redo_no_start;
+            continue;
         case '\n':
             file->line_num++;
             p++;
@@ -904,7 +905,7 @@ redo_start:
                 expect("#endif");
             if (c == '\\')
                 ++p;
-            goto redo_no_start;
+            continue;
         /* skip strings */
         case '\"':
         case '\'':
@@ -924,7 +925,7 @@ redo_start:
             } else if (c == '/') {
                 p = parse_line_comment(p);
             }
-            break;
+            continue;
         case '#':
             p++;
             if (start_of_line) {
@@ -1209,7 +1210,7 @@ static inline void tok_get(int *t, const int **pp, CValue *cv)
     case TOK_PPNUM:
     case TOK_PPSTR:
         cv->str.size = *p++;
-        cv->str.data = p;
+        cv->str.data = (char*)p;
         p += (cv->str.size + sizeof(int) - 1) / sizeof(int);
         break;
     case TOK_CDOUBLE:
@@ -1331,6 +1332,16 @@ static void maybe_run_test(TCCState *s)
     define_push(tok, MACRO_OBJ, NULL, NULL);
 }
 
+ST_FUNC void skip_to_eol(int warn)
+{
+    if (tok == TOK_LINEFEED)
+        return;
+    if (warn)
+        tcc_warning("extra tokens after directive");
+    file->buf_ptr = parse_line_comment(file->buf_ptr - 1);
+    tok = TOK_LINEFEED;
+}
+
 static CachedInclude *
 search_cached_include(TCCState *s1, const char *filename, int add);
 
@@ -1369,6 +1380,9 @@ static int parse_include(TCCState *s1, int do_next, int test)
         /* remove '<>|""' */
         memmove(p, p + 1, i - 1), p[i - 1] = 0;
     }
+
+    if (!test)
+        skip_to_eol(1);
 
     i = do_next ? file->include_next_index : -1;
     for (;;) {
@@ -1658,7 +1672,7 @@ static CachedInclude *search_cached_include(TCCState *s1, const char *filename, 
     return e;
 }
 
-static void pragma_parse(TCCState *s1)
+static int pragma_parse(TCCState *s1)
 {
     next_nomacro();
     if (tok == TOK_push_macro || tok == TOK_pop_macro) {
@@ -1690,7 +1704,7 @@ static void pragma_parse(TCCState *s1)
         pp_debug_tok = t, pp_debug_symv = v;
 
     } else if (tok == TOK_once) {
-        search_cached_include(s1, file->filename, 1)->once = 1;
+        search_cached_include(s1, file->true_filename, 1)->once = 1;
 
     } else if (s1->output_type == TCC_OUTPUT_PREPROCESS) {
         /* tcc -E: keep pragmas below unchanged */
@@ -1698,6 +1712,7 @@ static void pragma_parse(TCCState *s1)
         unget_tok(TOK_PRAGMA);
         unget_tok('#');
         unget_tok(TOK_LINEFEED);
+        return 1;
 
     } else if (tok == TOK_pack) {
         /* This may be:
@@ -1749,7 +1764,7 @@ static void pragma_parse(TCCState *s1)
         skip(',');
         if (tok != TOK_STR)
             goto pragma_err;
-        p = tcc_strdup((char *)tokc.str.data);
+        p = tcc_strdup(tokc.str.data);
         next();
         if (tok != ')')
             goto pragma_err;
@@ -1761,13 +1776,37 @@ static void pragma_parse(TCCState *s1)
             tcc_free(p);
         }
 
-    } else
-        tcc_warning_c(warn_unsupported)("#pragma %s ignored", get_tok_str(tok, &tokc));
-    return;
-
+    } else {
+        tcc_warning_c(warn_all)("#pragma %s ignored", get_tok_str(tok, &tokc));
+        return 0;
+    }
+    next();
+    return 1;
 pragma_err:
     tcc_error("malformed #pragma directive");
-    return;
+}
+
+/* put alternative filename */
+ST_FUNC void tccpp_putfile(const char *filename)
+{
+    char buf[1024];
+    buf[0] = 0;
+    if (!IS_ABSPATH(filename)) {
+        /* prepend directory from real file */
+        pstrcpy(buf, sizeof buf, file->true_filename);
+        *tcc_basename(buf) = 0;
+    }
+    pstrcat(buf, sizeof buf, filename);
+#ifdef _WIN32
+    normalize_slashes(buf);
+#endif
+    if (0 == strcmp(file->filename, buf))
+        return;
+    //printf("new file '%s'\n", buf);
+    if (file->true_filename == file->filename)
+        file->true_filename = tcc_strdup(file->filename);
+    pstrcpy(file->filename, sizeof file->filename, buf);
+    tcc_debug_newfile(tcc_state);
 }
 
 /* is_bof is true if first non space token at beginning of file */
@@ -1803,6 +1842,7 @@ ST_FUNC void preprocess(int is_bof)
         /* undefine symbol by putting an invalid name */
         if (s)
             define_undef(s);
+        next_nomacro();
         break;
     case TOK_INCLUDE:
     case TOK_INCLUDE_NEXT:
@@ -1832,12 +1872,14 @@ ST_FUNC void preprocess(int is_bof)
             || tok == TOK___HAS_INCLUDE
             || tok == TOK___HAS_INCLUDE_NEXT)
             c ^= 1;
+        next_nomacro();
     do_if:
         if (s1->ifdef_stack_ptr >= s1->ifdef_stack + IFDEF_STACK_SIZE)
             tcc_error("memory full (ifdef)");
         *s1->ifdef_stack_ptr++ = c;
         goto test_skip;
     case TOK_ELSE:
+        next_nomacro();
         if (s1->ifdef_stack_ptr == s1->ifdef_stack)
             tcc_error("#else without matching #if");
         if (s1->ifdef_stack_ptr[-1] & 2)
@@ -1852,6 +1894,7 @@ ST_FUNC void preprocess(int is_bof)
             tcc_error("#elif after #else");
         /* last #if/#elif expression was true: we skip */
         if (c == 1) {
+            skip_to_eol(0);
             c = 0;
         } else {
             c = expr_preprocess(s1);
@@ -1862,12 +1905,14 @@ ST_FUNC void preprocess(int is_bof)
             file->ifndef_macro = 0;
     test_skip:
         if (!(c & 1)) {
+            skip_to_eol(1);
             preprocess_skip();
             is_bof = 0;
             goto redo;
         }
         break;
     case TOK_ENDIF:
+        next_nomacro();
         if (s1->ifdef_stack_ptr <= file->ifdef_stack_ptr)
             tcc_error("#endif without matching #if");
         s1->ifdef_stack_ptr--;
@@ -1879,41 +1924,27 @@ ST_FUNC void preprocess(int is_bof)
             /* need to set to zero to avoid false matches if another
                #ifndef at middle of file */
             file->ifndef_macro = 0;
-            while (tok != TOK_LINEFEED)
-                next_nomacro();
             tok_flags |= TOK_FLAG_ENDIF;
-            goto the_end;
         }
         break;
-    case TOK_PPNUM:
-        n = strtoul((char*)tokc.str.data, &q, 10);
-        goto _line_num;
     case TOK_LINE:
-        next();
-        if (tok != TOK_CINT)
+        next_nomacro();
+        if (tok != TOK_PPNUM)
     _line_err:
             tcc_error("wrong #line format");
+    case TOK_PPNUM:
+        parse_number(tokc.str.data);
         n = tokc.i;
-    _line_num:
-        next();
+        next_nomacro();
         if (tok != TOK_LINEFEED) {
-            if (tok == TOK_STR) {
-                if (file->true_filename == file->filename)
-                    file->true_filename = tcc_strdup(file->filename);
-                q = (char *)tokc.str.data;
-                buf[0] = 0;
-                if (!IS_ABSPATH(q)) {
-                    /* prepend directory from real file */
-                    pstrcpy(buf, sizeof buf, file->true_filename);
-                    *tcc_basename(buf) = 0;
-                }
-                pstrcat(buf, sizeof buf, q);
-                tcc_debug_putfile(s1, buf);
+            if (tok == TOK_PPSTR && tokc.str.data[0] == '"') {
+                tokc.str.data[tokc.str.size - 2] = 0;
+                tccpp_putfile(tokc.str.data + 1);
             } else if (parse_flags & PARSE_FLAG_ASM_FILE)
-                break;
+                goto ignore;
             else
                 goto _line_err;
-            --n;
+            next_nomacro();
         }
         if (file->fd > 0)
             total_lines += file->line_num - n;
@@ -1922,6 +1953,7 @@ ST_FUNC void preprocess(int is_bof)
 
     case TOK_ERROR:
     case TOK_WARNING:
+    {
         q = buf;
         c = skip_spaces();
         while (c != '\n' && c != CH_EOF) {
@@ -1934,9 +1966,12 @@ ST_FUNC void preprocess(int is_bof)
             tcc_error("#error %s", buf);
         else
             tcc_warning("#warning %s", buf);
+        next_nomacro();
         break;
+    }
     case TOK_PRAGMA:
-        pragma_parse(s1);
+        if (!pragma_parse(s1))
+            goto ignore;
         break;
     case TOK_LINEFEED:
         goto the_end;
@@ -1945,16 +1980,14 @@ ST_FUNC void preprocess(int is_bof)
         if (saved_parse_flags & PARSE_FLAG_ASM_FILE)
             goto ignore;
         if (tok == '!' && is_bof)
-            /* '!' is ignored at beginning to allow C scripts. */
+            /* '#!' is ignored at beginning to allow C scripts. */
             goto ignore;
         tcc_warning("Ignoring unknown preprocessing directive #%s", get_tok_str(tok, &tokc));
     ignore:
-        file->buf_ptr = parse_line_comment(file->buf_ptr - 1);
-        break;
+        skip_to_eol(0);
+        goto the_end;
     }
-    /* ignore other preprocess commands or #! for C scripts */
-    while (tok != TOK_LINEFEED)
-        next_nomacro();
+    skip_to_eol(1);
  the_end:
     parse_flags = saved_parse_flags;
 }
@@ -2006,7 +2039,7 @@ static void parse_escape_string(CString *outstr, const uint8_t *buf, int is_long
                         c = c - 'A' + 10;
                     else if (isnum(c))
                         c = c - '0';
-                    else if (i > 0)
+                    else if (i >= 0)
                         expect("more hex digits in universal-character-name");
                     else
                         goto add_hex_or_ucn;
@@ -2564,7 +2597,7 @@ static void next_nomacro(void)
 #ifdef INC_DEBUG
                     printf("#endif %s\n", get_tok_str(file->ifndef_macro_saved, NULL));
 #endif
-                    search_cached_include(s1, file->filename, 1)
+                    search_cached_include(s1, file->true_filename, 1)
                         ->ifndef_macro = file->ifndef_macro_saved;
                     tok_flags &= ~TOK_FLAG_ENDIF;
                 }
@@ -3481,10 +3514,10 @@ convert:
     /* convert preprocessor tokens into C tokens */
     if (t == TOK_PPNUM) {
         if  (parse_flags & PARSE_FLAG_TOK_NUM)
-            parse_number((char *)tokc.str.data);
+            parse_number(tokc.str.data);
     } else if (t == TOK_PPSTR) {
         if (parse_flags & PARSE_FLAG_TOK_STR)
-            parse_string((char *)tokc.str.data, tokc.str.size - 1);
+            parse_string(tokc.str.data, tokc.str.size - 1);
     }
 }
 

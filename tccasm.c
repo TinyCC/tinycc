@@ -728,7 +728,7 @@ static void asm_parse_directive(TCCState *s1, int global)
     case TOK_ASMDIR_ascii:
     case TOK_ASMDIR_asciz:
         {
-            const uint8_t *p;
+            const char *p;
             int i, size, t;
 
             t = tok;
@@ -772,15 +772,21 @@ static void asm_parse_directive(TCCState *s1, int global)
 	break;
     case TOK_ASMDIR_file:
         {
-            char filename[512];
-
-            filename[0] = '\0';
+            const char *p;
+            parse_flags &= ~PARSE_FLAG_TOK_STR;
             next();
-            if (tok == TOK_STR)
-                pstrcat(filename, sizeof(filename), tokc.str.data);
-            else
-                pstrcat(filename, sizeof(filename), get_tok_str(tok, NULL));
-            tcc_warning_c(warn_unsupported)("ignoring .file %s", filename);
+            if (tok == TOK_PPNUM)
+                next();
+            if (tok == TOK_PPSTR && tokc.str.data[0] == '"') {
+                tokc.str.data[tokc.str.size - 2] = 0;
+                p = tokc.str.data + 1;
+            } else if (tok >= TOK_IDENT) {
+                p = get_tok_str(tok, &tokc);
+            } else {
+                skip_to_eol(0);
+                break;
+            }
+            tccpp_putfile(p);
             next();
         }
         break;
@@ -968,6 +974,7 @@ static int tcc_assemble_internal(TCCState *s1, int do_preprocess, int global)
         next();
         if (tok == TOK_EOF)
             break;
+        tcc_debug_line(s1);
         parse_flags |= PARSE_FLAG_LINEFEED; /* XXX: suppress that hack */
     redo:
         if (tok == '#') {
@@ -1033,9 +1040,8 @@ ST_FUNC int tcc_assemble(TCCState *s1, int do_preprocess)
 /* GCC inline asm support */
 
 /* assemble the string 'str' in the current C compilation unit without
-   C preprocessing. NOTE: str is modified by modifying the '\0' at the
-   end */
-static void tcc_assemble_inline(TCCState *s1, char *str, int len, int global)
+   C preprocessing. */
+static void tcc_assemble_inline(TCCState *s1, const char *str, int len, int global)
 {
     const int *saved_macro_ptr = macro_ptr;
     int dotid = set_idnum('.', IS_ID);

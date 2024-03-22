@@ -1048,11 +1048,8 @@ static BufferedFile* put_new_file(TCCState *s1)
 }
 
 /* put alternative filename */
-ST_FUNC void tcc_debug_putfile(TCCState *s1, const char *filename)
+ST_FUNC void tcc_debug_newfile(TCCState *s1)
 {
-    if (0 == strcmp(file->filename, filename))
-        return;
-    pstrcpy(file->filename, sizeof(file->filename), filename);
     if (!s1->do_debug)
         return;
     if (s1->dwarf)

@@ -502,7 +502,7 @@ typedef union CValue {
     float f;
     uint64_t i;
     struct {
-        const void *data;
+        char *data;
         int size;
     } str;
     int tab[LDOUBLE_SIZE/4];
@@ -1390,6 +1390,7 @@ ST_FUNC void define_undef(Sym *s);
 ST_INLN Sym *define_find(int v);
 ST_FUNC void free_defines(Sym *b);
 ST_FUNC void parse_define(void);
+ST_FUNC void skip_to_eol(int warn);
 ST_FUNC void preprocess(int is_bof);
 ST_FUNC void next(void);
 ST_INLN void unget_tok(int last_tok);
@@ -1397,6 +1398,7 @@ ST_FUNC void preprocess_start(TCCState *s1, int filetype);
 ST_FUNC void preprocess_end(TCCState *s1);
 ST_FUNC void tccpp_new(TCCState *s);
 ST_FUNC void tccpp_delete(TCCState *s);
+ST_FUNC void tccpp_putfile(const char *filename);
 ST_FUNC int tcc_preprocess(TCCState *s1);
 ST_FUNC void skip(int c);
 ST_FUNC NORETURN void expect(const char *msg);
@@ -1822,7 +1824,7 @@ ST_FUNC void tcc_debug_start(TCCState *s1);
 ST_FUNC void tcc_debug_end(TCCState *s1);
 ST_FUNC void tcc_debug_bincl(TCCState *s1);
 ST_FUNC void tcc_debug_eincl(TCCState *s1);
-ST_FUNC void tcc_debug_putfile(TCCState *s1, const char *filename);
+ST_FUNC void tcc_debug_newfile(TCCState *s1);
 
 ST_FUNC void tcc_debug_line(TCCState *s1);
 ST_FUNC void tcc_add_debug_info(TCCState *s1, int param, Sym *s, Sym *e);
