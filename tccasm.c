@@ -927,6 +927,8 @@ static void asm_parse_directive(TCCState *s1, int global)
     case TOK_ASMDIR_option:
         next();
         switch(tok){
+            case TOK_ASM_rvc:    /* Will be deprecated soon in favor of arch */
+            case TOK_ASM_norvc:  /* Will be deprecated soon in favor of arch */
             case TOK_ASM_pic:
             case TOK_ASM_nopic:
             case TOK_ASM_relax:
