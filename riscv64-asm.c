@@ -272,18 +272,25 @@ static void asm_jal_opcode(TCCState *s1, int token){
     static const Operand ra = {.type = OP_REG, .reg = 1};
     Operand ops[2];
     parse_operand(s1, &ops[0]);
+    if ( ops[0].type != OP_REG ) {
+        /* no more operands, it's the pseudoinstruction:
+         *  jal offset
+         * Expand to:
+         *  jal ra, offset
+         */
+        ops[1] = ops[0];
+        ops[0] = ra;
+        goto emit;
+    }
     if ( tok == ',')
         next();
-    else {
-        /* no more operands, it's the pseudoinstruction:
-         *  jal rs
-         * Expand to:
-         *  jal ra, rs
-         */
-        asm_emit_j(token, 0x6f, &ra, &ops[0]);
-        return;
-    }
+    else
+        expect("','");
     parse_operand(s1, &ops[1]);
+emit:
+    if (ops[1].e.sym && ops[1].e.sym->type.t & (VT_EXTERN | VT_STATIC)){
+        greloca(cur_text_section, ops[1].e.sym, ind, R_RISCV_JAL, 0);
+    }
     asm_emit_j(token, 0x6f, &ops[0], &ops[1]);
 }
 
@@ -722,7 +729,7 @@ static void asm_emit_j(int token, uint32_t opcode, const Operand* rd, const Oper
     imm = rs2->e.v;
 
     /* even offsets in a +- 1 MiB range */
-    if (imm > 0x1ffffe) {
+    if ((int)imm > (1 << 20) -1 || (int)imm <= -1 * ((1 << 20) -1)) {
         tcc_error("'%s': Expected second source operand that is an immediate value between 0 and 0x1fffff", get_tok_str(token, NULL));
         return;
     }
