@@ -240,7 +240,6 @@ static void parse_mem_access_operands(TCCState *s1, Operand* ops){
     static const Operand zimm = {.type = OP_IM12S};
 
     Operand op;
-    int i;
 
     parse_operand(s1, &ops[0]);
     if ( tok == ',')
@@ -305,7 +304,6 @@ static void asm_jalr_opcode(TCCState *s1, int token){
     static const Operand ra = {.type = OP_REG, .reg = 1};
     Operand ops[3];
     Operand op;
-    int i;
 
     parse_operand(s1, &ops[0]);
     if ( tok == ',')
@@ -441,8 +439,10 @@ static void asm_binary_opcode(TCCState* s1, int token)
     static const Operand zero = {.type = OP_REG, .reg = 0};
     Operand imm = {.type = OP_IM12S, .e = {.v = 0}};
     Operand ops[2];
-    parse_operands(s1, &ops[0], 2);
+    int32_t lo;
+    uint32_t hi;
 
+    parse_operands(s1, &ops[0], 2);
     switch (token) {
     case TOK_ASM_lui:
         asm_emit_u(token, (0xD << 2) | 3, &ops[0], &ops[1]);
@@ -562,8 +562,8 @@ static void asm_binary_opcode(TCCState* s1, int token)
         if(ops[1].type != OP_IM32 && ops[1].type != OP_IM12S){
             tcc_error("'%s': Expected first source operand that is an immediate value between 0 and 0xFFFFFFFFFFFFFFFF", get_tok_str(token, NULL));
         }
-        int32_t lo = ops[1].e.v;
-        uint32_t hi = (int64_t)ops[1].e.v >> 32;
+        lo = ops[1].e.v;
+        hi = (int64_t)ops[1].e.v >> 32;
         if(lo < 0){
             hi += 1;
         }
@@ -1574,11 +1574,11 @@ static inline int constraint_priority(const char *str)
             pr = 4;
             break;
         case 'v':
-            tcc_error("unimp: vector constraints", c);
+            tcc_error("unimp: vector constraints '%d'", c);
             pr = 0;
             break;
         default:
-            tcc_error("unknown constraint '%c'", c);
+            tcc_error("unknown constraint '%d'", c);
             pr = 0;
         }
         if (pr > priority)
