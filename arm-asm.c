@@ -3075,7 +3075,6 @@ ST_FUNC void asm_compute_constraints(ASMOperand *operands,
                 tcc_error
                     ("asm regvar requests register that's taken already");
             reg = op->reg;
-            goto reg_found;
         }
       try_next:
         c = *str++;
@@ -3095,7 +3094,9 @@ ST_FUNC void asm_compute_constraints(ASMOperand *operands,
         case 'r': // general-purpose register
         case 'p': // loadable/storable address
             /* any general register */
-            for (reg = 0; reg <= 8; reg++) {
+            if ((reg = op->reg) >= 0)
+                goto reg_found;
+            else for (reg = 0; reg <= 8; reg++) {
                 if (!is_reg_allocated(reg))
                     goto reg_found;
             }

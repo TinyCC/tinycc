@@ -1342,7 +1342,6 @@ ST_FUNC void asm_compute_constraints(ASMOperand *operands,
 	    if (is_reg_allocated(op->reg))
 	        tcc_error("asm regvar requests register that's taken already");
 	    reg = op->reg;
-	    goto reg_found;
 	}
     try_next:
         c = *str++;
@@ -1385,12 +1384,17 @@ ST_FUNC void asm_compute_constraints(ASMOperand *operands,
         case 'D':
             reg = 7;
         alloc_reg:
+            if (op->reg >= 0 && reg != op->reg)
+                goto try_next;
             if (is_reg_allocated(reg))
                 goto try_next;
             goto reg_found;
         case 'q':
             /* eax, ebx, ecx or edx */
-            for(reg = 0; reg < 4; reg++) {
+            if (op->reg >= 0) {
+                if ((reg = op->reg) < 4)
+                    goto reg_found;
+            } else for(reg = 0; reg < 4; reg++) {
                 if (!is_reg_allocated(reg))
                     goto reg_found;
             }
@@ -1399,7 +1403,9 @@ ST_FUNC void asm_compute_constraints(ASMOperand *operands,
 	case 'R':
 	case 'p': /* A general address, for x86(64) any register is acceptable*/
             /* any general register */
-            for(reg = 0; reg < 8; reg++) {
+            if ((reg = op->reg) >= 0)
+                goto reg_found;
+            else for(reg = 0; reg < 8; reg++) {
                 if (!is_reg_allocated(reg))
                     goto reg_found;
             }
