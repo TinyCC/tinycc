@@ -132,9 +132,6 @@ static void asm_nullary_opcode(TCCState *s1, int token)
     switch (token) {
     // Sync instructions
 
-    case TOK_ASM_fence: // I
-        asm_emit_opcode((0x3 << 2) | 3 | (0 << 12));
-        return;
     case TOK_ASM_fence_i: // I
         asm_emit_opcode((0x3 << 2) | 3| (1 << 12));
         return;
@@ -433,6 +430,34 @@ static void asm_emit_u(int token, uint32_t opcode, const Operand* rd, const Oper
 	      11...7 rd
 	      6...0 opcode */
     gen_le32(opcode | ENCODE_RD(rd->reg) | (rs2->e.v << 12));
+}
+
+static int parse_fence_operand(){
+    int t = tok;
+    if ( tok == TOK_ASM_or ){
+        // we are in a fence instruction, parse as output read
+        t = TOK_ASM_or_fence;
+    }
+    next();
+    return t - (TOK_ASM_w_fence - 1);
+}
+
+static void asm_fence_opcode(TCCState *s1, int token){
+    // `fence` is both an instruction and a pseudoinstruction:
+    // `fence` expands to `fence iorw, iorw`
+    int succ = 0xF, pred = 0xF;
+    if (tok != TOK_LINEFEED && tok != ';' && tok != CH_EOF){
+        pred = parse_fence_operand();
+        if ( pred > 0xF || pred < 0) {
+            tcc_error("'%s': Expected first operand that is a valid predecessor operand", get_tok_str(token, NULL));
+        }
+        if ( tok == ',') next(); else expect("','");
+        succ = parse_fence_operand();
+        if ( succ > 0xF || succ < 0) {
+            tcc_error("'%s': Expected second operand that is a valid successor operand", get_tok_str(token, NULL));
+        }
+    }
+    asm_emit_opcode((0x3 << 2) | 3 | (0 << 12) | succ<<20 | pred<<24);
 }
 
 static void asm_binary_opcode(TCCState* s1, int token)
@@ -1206,13 +1231,16 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     switch (token) {
     case TOK_ASM_ebreak:
     case TOK_ASM_ecall:
-    case TOK_ASM_fence: // XXX: it's missing iorw for pred and succ
     case TOK_ASM_fence_i:
     case TOK_ASM_hrts:
     case TOK_ASM_mrth:
     case TOK_ASM_mrts:
     case TOK_ASM_wfi:
         asm_nullary_opcode(s1, token);
+        return;
+
+    case TOK_ASM_fence:
+        asm_fence_opcode(s1, token);
         return;
 
     case TOK_ASM_rdcycle:

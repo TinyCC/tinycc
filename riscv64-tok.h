@@ -11,6 +11,9 @@
 #define DEF_ASM_WITH_SUFFIXES(x, y, z) \
   DEF(TOK_ASM_ ## x ## _ ## y ## _ ## z, #x "." #y "." #z)
 
+#define DEF_ASM_FENCE(x) \
+  DEF(TOK_ASM_ ## x ## _fence, #x)
+
 /* register */
  /* integer */
  DEF_ASM(x0)
@@ -447,5 +450,26 @@
  DEF_ASM_WITH_SUFFIXES(sc, d, aq)
  DEF_ASM_WITH_SUFFIXES(sc, d, rl)
  DEF_ASM_WITH_SUFFIXES(sc, d, aqrl)
+
+/* `fence` arguments */
+/* NOTE: Order is important */
+ DEF_ASM_FENCE(w)
+ DEF_ASM_FENCE(r)
+ DEF_ASM_FENCE(rw)
+
+ DEF_ASM_FENCE(o)
+ DEF_ASM_FENCE(ow)
+ DEF_ASM_FENCE(or)
+ DEF_ASM_FENCE(orw)
+
+ DEF_ASM_FENCE(i)
+ DEF_ASM_FENCE(iw)
+ DEF_ASM_FENCE(ir)
+ DEF_ASM_FENCE(irw)
+
+ DEF_ASM_FENCE(io)
+ DEF_ASM_FENCE(iow)
+ DEF_ASM_FENCE(ior)
+ DEF_ASM_FENCE(iorw)
 
 #undef DEF_ASM_WITH_SUFFIX
