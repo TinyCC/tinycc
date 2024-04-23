@@ -8,6 +8,9 @@
 #define DEF_ASM_WITH_SUFFIX(x, y) \
   DEF(TOK_ASM_ ## x ## _ ## y, #x "." #y)
 
+#define DEF_ASM_WITH_SUFFIXES(x, y, z) \
+  DEF(TOK_ASM_ ## x ## _ ## y ## _ ## z, #x "." #y "." #z)
+
 /* register */
  /* integer */
  DEF_ASM(x0)
@@ -421,5 +424,28 @@
  DEF_ASM(norelax)
  DEF_ASM(push)
  DEF_ASM(pop)
+
+/* “A” Standard Extension for Atomic Instructions, Version 2.1 */
+ /* XXX: Atomic memory operations */
+ DEF_ASM_WITH_SUFFIX(lr, w)
+ DEF_ASM_WITH_SUFFIXES(lr, w, aq)
+ DEF_ASM_WITH_SUFFIXES(lr, w, rl)
+ DEF_ASM_WITH_SUFFIXES(lr, w, aqrl)
+
+ DEF_ASM_WITH_SUFFIX(lr, d)
+ DEF_ASM_WITH_SUFFIXES(lr, d, aq)
+ DEF_ASM_WITH_SUFFIXES(lr, d, rl)
+ DEF_ASM_WITH_SUFFIXES(lr, d, aqrl)
+
+
+ DEF_ASM_WITH_SUFFIX(sc, w)
+ DEF_ASM_WITH_SUFFIXES(sc, w, aq)
+ DEF_ASM_WITH_SUFFIXES(sc, w, rl)
+ DEF_ASM_WITH_SUFFIXES(sc, w, aqrl)
+
+ DEF_ASM_WITH_SUFFIX(sc, d)
+ DEF_ASM_WITH_SUFFIXES(sc, d, aq)
+ DEF_ASM_WITH_SUFFIXES(sc, d, rl)
+ DEF_ASM_WITH_SUFFIXES(sc, d, aqrl)
 
 #undef DEF_ASM_WITH_SUFFIX

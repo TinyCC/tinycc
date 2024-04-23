@@ -51,6 +51,7 @@ typedef struct Operand {
 static void asm_binary_opcode(TCCState* s1, int token);
 ST_FUNC void asm_clobber(uint8_t *clobber_regs, const char *str);
 ST_FUNC void asm_compute_constraints(ASMOperand *operands, int nb_operands, int nb_outputs, const uint8_t *clobber_regs, int *pout_reg);
+static void asm_emit_a(int token, uint32_t opcode, const Operand *rs1, const Operand *rs2, const Operand *rd1, int aq, int rl);
 static void asm_emit_b(int token, uint32_t opcode, const Operand *rs1, const Operand *rs2, const Operand *imm);
 static void asm_emit_i(int token, uint32_t opcode, const Operand *rd, const Operand *rs1, const Operand *rs2);
 static void asm_emit_j(int token, uint32_t opcode, const Operand *rd, const Operand *rs2);
@@ -1044,6 +1045,102 @@ static void asm_ternary_opcode(TCCState *s1, int token)
     }
 }
 
+static void asm_atomic_opcode(TCCState *s1, int token)
+{
+    static const Operand zero = {.type = OP_REG};
+    Operand ops[3];
+
+    parse_operand(s1, &ops[0]);
+    if ( tok == ',') next(); else expect("','");
+
+    if ( token <= TOK_ASM_lr_d_aqrl && token >= TOK_ASM_lr_w ) {
+        ops[1] = zero;
+    } else {
+        parse_operand(s1, &ops[1]);
+        if ( tok == ',') next(); else expect("','");
+    }
+
+    if ( tok == '(') next(); else expect("'('");
+    parse_operand(s1, &ops[2]);
+    if ( tok == ')') next(); else expect("')'");
+
+    switch(token){
+        case TOK_ASM_lr_w:
+            asm_emit_a(token, 0x2F | 0x2<<12 | 0x2<<27, &ops[0], &ops[1], &ops[2], 0, 0);
+            break;
+        case TOK_ASM_lr_w_aq:
+            asm_emit_a(token, 0x2F | 0x2<<12 | 0x2<<27, &ops[0], &ops[1], &ops[2], 1, 0);
+            break;
+        case TOK_ASM_lr_w_rl:
+            asm_emit_a(token, 0x2F | 0x2<<12 | 0x2<<27, &ops[0], &ops[1], &ops[2], 0, 1);
+            break;
+        case TOK_ASM_lr_w_aqrl:
+            asm_emit_a(token, 0x2F | 0x2<<12 | 0x2<<27, &ops[0], &ops[1], &ops[2], 1, 1);
+            break;
+
+        case TOK_ASM_lr_d:
+            asm_emit_a(token, 0x2F | 0x3<<12 | 0x2<<27, &ops[0], &ops[1], &ops[2], 0, 0);
+            break;
+        case TOK_ASM_lr_d_aq:
+            asm_emit_a(token, 0x2F | 0x3<<12 | 0x2<<27, &ops[0], &ops[1], &ops[2], 1, 0);
+            break;
+        case TOK_ASM_lr_d_rl:
+            asm_emit_a(token, 0x2F | 0x3<<12 | 0x2<<27, &ops[0], &ops[1], &ops[2], 0, 1);
+            break;
+        case TOK_ASM_lr_d_aqrl:
+            asm_emit_a(token, 0x2F | 0x3<<12 | 0x2<<27, &ops[0], &ops[1], &ops[2], 1, 1);
+            break;
+
+        case TOK_ASM_sc_w:
+            asm_emit_a(token, 0x2F | 0x2<<12 | 0x3<<27, &ops[0], &ops[1], &ops[2], 0, 0);
+            break;
+        case TOK_ASM_sc_w_aq:
+            asm_emit_a(token, 0x2F | 0x2<<12 | 0x3<<27, &ops[0], &ops[1], &ops[2], 1, 0);
+            break;
+        case TOK_ASM_sc_w_rl:
+            asm_emit_a(token, 0x2F | 0x2<<12 | 0x3<<27, &ops[0], &ops[1], &ops[2], 0, 1);
+            break;
+        case TOK_ASM_sc_w_aqrl:
+            asm_emit_a(token, 0x2F | 0x2<<12 | 0x3<<27, &ops[0], &ops[1], &ops[2], 1, 1);
+            break;
+
+        case TOK_ASM_sc_d:
+            asm_emit_a(token, 0x2F | 0x3<<12 | 0x3<<27, &ops[0], &ops[1], &ops[2], 0, 0);
+            break;
+        case TOK_ASM_sc_d_aq:
+            asm_emit_a(token, 0x2F | 0x3<<12 | 0x3<<27, &ops[0], &ops[1], &ops[2], 1, 0);
+            break;
+        case TOK_ASM_sc_d_rl:
+            asm_emit_a(token, 0x2F | 0x3<<12 | 0x3<<27, &ops[0], &ops[1], &ops[2], 0, 1);
+            break;
+        case TOK_ASM_sc_d_aqrl:
+            asm_emit_a(token, 0x2F | 0x3<<12 | 0x3<<27, &ops[0], &ops[1], &ops[2], 1, 1);
+            break;
+    }
+}
+
+/* caller: Add funct3 and func5 to opcode */
+static void asm_emit_a(int token, uint32_t opcode, const Operand *rd1, const Operand *rs2, const Operand *rs1, int aq, int rl)
+{
+    if (rd1->type != OP_REG)
+        tcc_error("'%s': Expected first destination operand that is a register", get_tok_str(token, NULL));
+    if (rs2->type != OP_REG)
+        tcc_error("'%s': Expected second source operand that is a register", get_tok_str(token, NULL));
+    if (rs1->type != OP_REG)
+        tcc_error("'%s': Expected third source operand that is a register", get_tok_str(token, NULL));
+        /* A-type instruction:
+	        31...27 funct5
+	        26      aq
+	        25      rl
+	        24...20 rs2
+	        19...15 rs1
+	        14...11 funct3
+	        11...7  rd
+	        6...0 opcode
+        opcode always fixed pos. */
+    gen_le32(opcode | ENCODE_RS1(rs1->reg) | ENCODE_RS2(rs2->reg) | ENCODE_RD(rd1->reg) | aq << 26 | rl << 25);
+}
+
 /* caller: Add funct3 to opcode */
 static void asm_emit_s(int token, uint32_t opcode, const Operand* rs1, const Operand* rs2, const Operand* imm)
 {
@@ -1109,7 +1206,7 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     switch (token) {
     case TOK_ASM_ebreak:
     case TOK_ASM_ecall:
-    case TOK_ASM_fence:
+    case TOK_ASM_fence: // XXX: it's missing iorw for pred and succ
     case TOK_ASM_fence_i:
     case TOK_ASM_hrts:
     case TOK_ASM_mrth:
@@ -1305,6 +1402,26 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_bleu:
         asm_ternary_opcode(s1, token);
         return;
+
+    /* Atomic operations */
+    case TOK_ASM_lr_w:
+    case TOK_ASM_lr_w_aq:
+    case TOK_ASM_lr_w_rl:
+    case TOK_ASM_lr_w_aqrl:
+    case TOK_ASM_lr_d:
+    case TOK_ASM_lr_d_aq:
+    case TOK_ASM_lr_d_rl:
+    case TOK_ASM_lr_d_aqrl:
+    case TOK_ASM_sc_w:
+    case TOK_ASM_sc_w_aq:
+    case TOK_ASM_sc_w_rl:
+    case TOK_ASM_sc_w_aqrl:
+    case TOK_ASM_sc_d:
+    case TOK_ASM_sc_d_aq:
+    case TOK_ASM_sc_d_rl:
+    case TOK_ASM_sc_d_aqrl:
+        asm_atomic_opcode(s1, token);
+        break;
 
     default:
         expect("known instruction");
