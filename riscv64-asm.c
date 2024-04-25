@@ -244,6 +244,25 @@ static void parse_branch_offset_operand(TCCState *s1, Operand *op){
     }
 }
 
+static void parse_jump_offset_operand(TCCState *s1, Operand *op){
+    ExprValue e = {0};
+
+    asm_expr(s1, &e);
+    op->type = OP_IM32;
+    op->e = e;
+    /* compare against unsigned 12-bit maximum */
+    if (!op->e.sym) {
+        if ((int) op->e.v >= -0x1000 && (int) op->e.v < 0x1000)
+            op->type = OP_IM12S;
+    } else if (op->e.sym->type.t & (VT_EXTERN | VT_STATIC)) {
+        greloca(cur_text_section, op->e.sym, ind, R_RISCV_JAL, 0);
+        op->type = OP_IM12S;
+        op->e.v = 0;
+    } else {
+        expect("operand");
+    }
+}
+
 static void parse_operands(TCCState *s1, Operand* ops, int count){
     int i;
     for (i = 0; i < count; i++) {
@@ -296,27 +315,19 @@ static void parse_mem_access_operands(TCCState *s1, Operand* ops){
 /* This is special: First operand is optional */
 static void asm_jal_opcode(TCCState *s1, int token){
     static const Operand ra = {.type = OP_REG, .reg = 1};
+    static const Operand zero = {.type = OP_REG};
     Operand ops[2];
-    parse_operand(s1, &ops[0]);
-    if ( ops[0].type != OP_REG ) {
-        /* no more operands, it's the pseudoinstruction:
-         *  jal offset
-         * Expand to:
-         *  jal ra, offset
-         */
-        ops[1] = ops[0];
-        ops[0] = ra;
-        goto emit;
+
+    if (token == TOK_ASM_j ){
+        ops[0] = zero; // j offset
+    } else if (asm_parse_regvar(tok) == -1) {
+        ops[0] = ra;   // jal offset
+    } else {
+        // jal reg, offset
+        parse_operand(s1, &ops[0]);
+        if ( tok == ',') next(); else expect("','");
     }
-    if ( tok == ',')
-        next();
-    else
-        expect("','");
-    parse_operand(s1, &ops[1]);
-emit:
-    if (ops[1].e.sym && ops[1].e.sym->type.t & (VT_EXTERN | VT_STATIC)){
-        greloca(cur_text_section, ops[1].e.sym, ind, R_RISCV_JAL, 0);
-    }
+    parse_jump_offset_operand(s1, &ops[1]);
     asm_emit_j(token, 0x6f, &ops[0], &ops[1]);
 }
 
@@ -1309,6 +1320,9 @@ ST_FUNC void asm_opcode(TCCState *s1, int token)
     case TOK_ASM_jalr:
         asm_jalr_opcode(s1, token); /* it can be a pseudo instruction too*/
         break;
+    case TOK_ASM_j:
+        asm_jal_opcode(s1, token); /* jal zero, offset*/
+        return;
     case TOK_ASM_jal:
         asm_jal_opcode(s1, token); /* it can be a pseudo instruction too*/
         break;
