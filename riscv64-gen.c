@@ -193,8 +193,8 @@ static int load_symofs(int r, SValue *sv, int forstore)
         if (doload) {
             EI(0x03, 3, rr, rr, 0); // ld RR, 0(RR)
             if (large_addend) {
-                o(0x37 | (5 << 7) | ((0x800 + fc) & 0xfffff000)); //lui t0, high(fc)
-                ER(0x33, 0, rr, rr, 5, 0); // add RR, RR, t0
+                o(0x37 | (6 << 7) | ((0x800 + fc) & 0xfffff000)); //lui t1, high(fc)
+                ER(0x33, 0, rr, rr, 6, 0); // add RR, RR, t1
                 sv->c.i = fc << 20 >> 20;
             }
         }
