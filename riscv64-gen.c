@@ -239,7 +239,7 @@ ST_FUNC void load(int r, SValue *sv)
         int func3, opcode = is_freg(r) ? 0x07 : 0x03, br;
         size = type_size(&sv->type, &align);
         assert (!is_freg(r) || bt == VT_FLOAT || bt == VT_DOUBLE);
-        if (bt == VT_FUNC) /* XXX should be done in generic code */
+        if (bt == VT_PTR || bt == VT_FUNC) /* XXX should be done in generic code */
           size = PTR_SIZE;
         func3 = size == 1 ? 0 : size == 2 ? 1 : size == 4 ? 2 : 3;
         if (size < 4 && !is_float(sv->type.t) && (sv->type.t & VT_UNSIGNED))
