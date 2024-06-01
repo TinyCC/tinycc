@@ -135,6 +135,7 @@
      DEF(TOK_FASTCALL1, "fastcall")
      DEF(TOK_FASTCALL2, "__fastcall")
      DEF(TOK_FASTCALL3, "__fastcall__")
+     DEF(TOK_THISCALL1, "thiscall")
      DEF(TOK_REGPARM1, "regparm")
      DEF(TOK_REGPARM2, "__regparm__")
      DEF(TOK_CLEANUP1, "cleanup")

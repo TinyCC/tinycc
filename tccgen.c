@@ -3974,7 +3974,10 @@ redo:
         case TOK_FASTCALL2:
         case TOK_FASTCALL3:
             ad->f.func_call = FUNC_FASTCALLW;
-            break;            
+            break;    
+        case TOK_THISCALL1:
+            ad->f.func_call = FUNC_THISCALL;
+            break;        
 #endif
         case TOK_MODE:
             skip('(');

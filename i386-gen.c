@@ -495,6 +495,9 @@ ST_FUNC void gfunc_call(int nb_args)
             /* XXX: incorrect for struct/floats */
             args_size -= 4;
         }
+    } else if((func_call == FUNC_THISCALL)) {
+      o(0x58 + TREG_ECX); /* pop ecx */
+      args_size -= 4;
     }
 #if !defined(TCC_TARGET_PE) && !TARGETOS_FreeBSD || TARGETOS_OpenBSD
     else if ((vtop->type.ref->type.t & VT_BTYPE) == VT_STRUCT)
@@ -503,7 +506,7 @@ ST_FUNC void gfunc_call(int nb_args)
 
     gcall_or_jmp(0);
 
-    if (args_size && func_call != FUNC_STDCALL && func_call != FUNC_FASTCALLW)
+    if (args_size && func_call != FUNC_STDCALL && func_call != FUNC_THISCALL && func_call != FUNC_FASTCALLW)
         gadd_sp(args_size);
     vtop--;
 }
@@ -523,6 +526,7 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
     const uint8_t *fastcall_regs_ptr;
     Sym *sym;
     CType *type;
+    int thiscall_nb_regs;
 
     sym = func_type->ref;
     func_call = sym->f.func_call;
@@ -540,6 +544,11 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
         fastcall_nb_regs = 0;
         fastcall_regs_ptr = NULL;
     }
+
+    if (func_call == FUNC_THISCALL) {
+        thiscall_nb_regs = 1;
+    }
+
     param_index = 0;
 
     ind += FUNC_PROLOG_SIZE;
@@ -575,6 +584,12 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
             o(0x89);     /* movl */
             gen_modrm(fastcall_regs_ptr[param_index], VT_LOCAL, NULL, loc);
             param_addr = loc;
+        } else if(param_index < thiscall_nb_regs) {
+            /* save THISCALL register; ECX */
+            loc -= 4;
+            o(0x89);     /* movl */
+            gen_modrm(TREG_ECX, VT_LOCAL, NULL, loc);
+            param_addr = loc;
         } else {
             param_addr = addr;
             addr += size;
@@ -585,7 +600,7 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
     }
     func_ret_sub = 0;
     /* pascal type call or fastcall ? */
-    if (func_call == FUNC_STDCALL || func_call == FUNC_FASTCALLW)
+    if (func_call == FUNC_STDCALL || func_call == FUNC_FASTCALLW || func_call == FUNC_THISCALL)
         func_ret_sub = addr - 8;
 #if !defined(TCC_TARGET_PE) && !TARGETOS_FreeBSD || TARGETOS_OpenBSD
     else if (func_vc)
