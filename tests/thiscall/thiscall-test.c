@@ -13,7 +13,5 @@ void ( __thiscall * const thisCall1 ) ( void * _this, int a ) = ( void ( __thisc
 int main() {
   thisCall1((void*) 0xDEADBEEF, 1000);
 
-  f(10001);
-
   return 1;
 }
