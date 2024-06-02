@@ -3976,6 +3976,8 @@ redo:
             ad->f.func_call = FUNC_FASTCALLW;
             break;    
         case TOK_THISCALL1:
+        case TOK_THISCALL2:
+        case TOK_THISCALL3:
             ad->f.func_call = FUNC_THISCALL;
             break;        
 #endif
