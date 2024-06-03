@@ -634,6 +634,7 @@ typedef struct DLLReference {
 #define FUNC_FASTCALL2 3 /* first parameters in %eax, %edx */
 #define FUNC_FASTCALL3 4 /* first parameter in %eax, %edx, %ecx */
 #define FUNC_FASTCALLW 5 /* first parameter in %ecx, %edx */
+#define FUNC_THISCALL  6 /* first param in %ecx */
 
 /* field 'Sym.t' for macros */
 #define MACRO_OBJ      0 /* object like macro */
