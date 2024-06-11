@@ -657,8 +657,6 @@ ST_FUNC Sym *sym_find2(Sym *s, int v)
     while (s) {
         if (s->v == v)
             return s;
-        else if (s->v == -1)
-            return NULL;
         s = s->prev;
     }
     return NULL;
@@ -1398,6 +1396,7 @@ ST_FUNC void save_reg_upstack(int r, int n)
                 p->r = (p->r & ~(VT_VALMASK | VT_BOUNDED)) | VT_LLOCAL;
             } else {
                 p->r = VT_LVAL | VT_LOCAL;
+                p->type.t &= ~VT_ARRAY; /* cannot combine VT_LVAL with VT_ARRAY */
             }
             p->sym = NULL;
             p->r2 = VT_CONST;
@@ -2838,13 +2837,24 @@ static int compare_types(CType *type1, CType *type2, int unqualified)
     }
 }
 
+#define CMP_OP 'C'
+#define SHIFT_OP 'S'
+
 /* Check if OP1 and OP2 can be "combined" with operation OP, the combined
    type is stored in DEST if non-null (except for pointer plus/minus) . */
 static int combine_types(CType *dest, SValue *op1, SValue *op2, int op)
 {
-    CType *type1 = &op1->type, *type2 = &op2->type, type;
-    int t1 = type1->t, t2 = type2->t, bt1 = t1 & VT_BTYPE, bt2 = t2 & VT_BTYPE;
+    CType *type1, *type2, type;
+    int t1, t2, bt1, bt2;
     int ret = 1;
+
+    /* for shifts, 'combine' only left operand */
+    if (op == SHIFT_OP)
+        op2 = op1;
+
+    type1 = &op1->type, type2 = &op2->type;
+    t1 = type1->t, t2 = type2->t;
+    bt1 = t1 & VT_BTYPE, bt2 = t2 & VT_BTYPE;
 
     type.t = VT_VOID;
     type.ref = NULL;
@@ -2854,7 +2864,10 @@ static int combine_types(CType *dest, SValue *op1, SValue *op2, int op)
         /* NOTE: as an extension, we accept void on only one side */
         type.t = VT_VOID;
     } else if (bt1 == VT_PTR || bt2 == VT_PTR) {
-        if (op == '+') ; /* Handled in caller */
+        if (op == '+') {
+          if (!is_integer_btype(bt1 == VT_PTR ? bt2 : bt1))
+            ret = 0;
+        }
         /* http://port70.net/~nsz/c/c99/n1256.html#6.5.15p6 */
         /* If one is a null ptr constant the result type is the other.  */
         else if (is_null_pointer (op2)) type = *type1;
@@ -2862,7 +2875,7 @@ static int combine_types(CType *dest, SValue *op1, SValue *op2, int op)
         else if (bt1 != bt2) {
             /* accept comparison or cond-expr between pointer and integer
                with a warning */
-            if ((op == '?' || TOK_ISCOND(op))
+            if ((op == '?' || op == CMP_OP)
                 && (is_integer_btype(bt1) || is_integer_btype(bt2)))
               tcc_warning("pointer/integer mismatch in %s",
                           op == '?' ? "conditional expression" : "comparison");
@@ -2877,7 +2890,7 @@ static int combine_types(CType *dest, SValue *op1, SValue *op2, int op)
             int newquals, copied = 0;
             if (pbt1 != VT_VOID && pbt2 != VT_VOID
                 && !compare_types(pt1, pt2, 1/*unqualif*/)) {
-                if (op != '?' && !TOK_ISCOND(op))
+                if (op != '?' && op != CMP_OP)
                   ret = 0;
                 else
                   type_incompatibility_warning(type1, type2,
@@ -2918,7 +2931,7 @@ static int combine_types(CType *dest, SValue *op1, SValue *op2, int op)
                   }
             }
         }
-        if (TOK_ISCOND(op))
+        if (op == CMP_OP)
           type.t = VT_SIZE_T;
     } else if (bt1 == VT_STRUCT || bt2 == VT_STRUCT) {
         if (op != '?' || !compare_types(type1, type2, 1))
@@ -2961,6 +2974,12 @@ ST_FUNC void gen_op(int op)
 {
     int t1, t2, bt1, bt2, t;
     CType type1, combtype;
+    int op_class = op;
+
+    if (op == TOK_SHR || op == TOK_SAR || op == TOK_SHL)
+        op_class = SHIFT_OP;
+    else if (TOK_ISCOND(op)) /* == != > ... */
+        op_class = CMP_OP;
 
 redo:
     t1 = vtop[-1].type.t;
@@ -2980,18 +2999,19 @@ redo:
 	    vswap();
 	}
 	goto redo;
-    } else if (!combine_types(&combtype, vtop - 1, vtop, op)) {
+    } else if (!combine_types(&combtype, vtop - 1, vtop, op_class)) {
+op_err:
         tcc_error("invalid operand types for binary operation");
     } else if (bt1 == VT_PTR || bt2 == VT_PTR) {
         /* at least one operand is a pointer */
         /* relational op: must be both pointers */
         int align;
-        if (TOK_ISCOND(op))
+        if (op_class == CMP_OP)
             goto std_op;
         /* if both pointers, then it must be the '-' op */
         if (bt1 == VT_PTR && bt2 == VT_PTR) {
             if (op != '-')
-                tcc_error("cannot use pointers here");
+                goto op_err;
             vpush_type_size(pointed_type(&vtop[-1].type), &align);
             vtop->type.t &= ~VT_UNSIGNED;
             vrott(3);
@@ -3002,14 +3022,15 @@ redo:
         } else {
             /* exactly one pointer : must be '+' or '-'. */
             if (op != '-' && op != '+')
-                tcc_error("cannot use pointers here");
+                goto op_err;
             /* Put pointer as first operand */
             if (bt2 == VT_PTR) {
                 vswap();
                 t = t1, t1 = t2, t2 = t;
+                bt2 = bt1;
             }
 #if PTR_SIZE == 4
-            if ((vtop[0].type.t & VT_BTYPE) == VT_LLONG)
+            if (bt2 == VT_LLONG)
                 /* XXX: truncate here because gen_opl can't handle ptr + long long */
                 gen_cast_s(VT_INT);
 #endif
@@ -3039,17 +3060,15 @@ redo:
         /* floats can only be used for a few operations */
         if (is_float(combtype.t)
             && op != '+' && op != '-' && op != '*' && op != '/'
-            && !TOK_ISCOND(op))
-            tcc_error("invalid operands for binary operation");
-        else if (op == TOK_SHR || op == TOK_SAR || op == TOK_SHL) {
-            t = bt1 == VT_LLONG ? VT_LLONG : VT_INT;
-            if ((t1 & (VT_BTYPE | VT_UNSIGNED | VT_BITFIELD)) == (t | VT_UNSIGNED))
-              t |= VT_UNSIGNED;
-            t |= (VT_LONG & t1);
-            combtype.t = t;
+            && op_class != CMP_OP) {
+            goto op_err;
         }
     std_op:
         t = t2 = combtype.t;
+        /* special case for shifts and long long: we keep the shift as
+           an integer */
+        if (op_class == SHIFT_OP)
+            t2 = VT_INT;
         /* XXX: currently, some unsigned operations are explicit, so
            we modify them here */
         if (t & VT_UNSIGNED) {
@@ -3071,16 +3090,12 @@ redo:
         vswap();
         gen_cast_s(t);
         vswap();
-        /* special case for shifts and long long: we keep the shift as
-           an integer */
-        if (op == TOK_SHR || op == TOK_SAR || op == TOK_SHL)
-            t2 = VT_INT;
         gen_cast_s(t2);
         if (is_float(t))
             gen_opif(op);
         else
             gen_opic(op);
-        if (TOK_ISCOND(op)) {
+        if (op_class == CMP_OP) {
             /* relational op: the result is an int */
             vtop->type.t = VT_INT;
         } else {
@@ -3416,13 +3431,10 @@ ST_FUNC int type_size(CType *type, int *a)
     } else if (bt == VT_PTR) {
         if (type->t & VT_ARRAY) {
             int ts;
-
             s = type->ref;
             ts = type_size(&s->type, a);
-
             if (ts < 0 && s->c < 0)
                 ts = -ts;
-
             return ts * s->c;
         } else {
             *a = PTR_SIZE;
@@ -3435,18 +3447,9 @@ ST_FUNC int type_size(CType *type, int *a)
         *a = LDOUBLE_ALIGN;
         return LDOUBLE_SIZE;
     } else if (bt == VT_DOUBLE || bt == VT_LLONG) {
-#ifdef TCC_TARGET_I386
-#ifdef TCC_TARGET_PE
-        *a = 8;
-#else
+#if (defined TCC_TARGET_I386 && !defined TCC_TARGET_PE) \
+ || (defined TCC_TARGET_ARM && !defined TCC_ARM_EABI)
         *a = 4;
-#endif
-#elif defined(TCC_TARGET_ARM)
-#ifdef TCC_ARM_EABI
-        *a = 8; 
-#else
-        *a = 4;
-#endif
 #else
         *a = 8;
 #endif
@@ -3974,12 +3977,12 @@ redo:
         case TOK_FASTCALL2:
         case TOK_FASTCALL3:
             ad->f.func_call = FUNC_FASTCALLW;
-            break;    
+            break;
         case TOK_THISCALL1:
         case TOK_THISCALL2:
         case TOK_THISCALL3:
             ad->f.func_call = FUNC_THISCALL;
-            break;        
+            break;
 #endif
         case TOK_MODE:
             skip('(');
@@ -5714,16 +5717,12 @@ ST_FUNC void unary(void)
     case TOK_builtin_return_address:
         {
             int tok1 = tok;
-            int64_t level;
+            int level;
             next();
             skip('(');
-            level = expr_const64();
-            if (level < 0) {
-                tcc_error("%s only takes positive integers",
-                          tok1 == TOK_builtin_return_address ?
-                          "__builtin_return_address" :
-                          "__builtin_frame_address");
-            }
+            level = expr_const();
+            if (level < 0)
+                tcc_error("%s only takes positive integers", get_tok_str(tok1, 0));
             skip(')');
             type.t = VT_VOID;
             mk_pointer(&type);
@@ -7400,12 +7399,10 @@ static void init_putz(init_params *p, unsigned long c, int size)
     } else {
         vpush_helper_func(TOK_memset);
         vseti(VT_LOCAL, c);
-#ifdef TCC_TARGET_ARM
-        vpushs(size);
-        vpushi(0);
-#else
         vpushi(0);
         vpushs(size);
+#if defined TCC_TARGET_ARM && defined TCC_ARM_EABI
+        vswap();  /* using __aeabi_memset(void*, size_t, int) */
 #endif
         gfunc_call(3);
     }

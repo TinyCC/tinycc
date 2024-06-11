@@ -483,4 +483,11 @@ struct A {
 # if X(1,2) //undefined function macro
 # endif
 
+#elif defined test_pointer_plus_double
+
+int *invalid_operation(int *p, double d)
+{
+    return p + d;
+}
+
 #endif

@@ -889,7 +889,7 @@ static void pe_build_imports(struct pe_info *pe)
 
         dllindex = p->dll_index;
         if (dllindex)
-            name = tcc_basename((dllref = pe->s1->loaded_dlls[dllindex-1])->name);
+            name = (dllref = pe->s1->loaded_dlls[dllindex-1])->name;
         else
             name = "", dllref = NULL;
 
@@ -1767,6 +1767,9 @@ static int pe_load_def(TCCState *s1, int fd)
     char dllname[80], *buf, *line, *p, *x, next;
 
     buf = tcc_load_text(fd);
+    if (!buf)
+        return ret;
+
     for (line = buf;; ++line)  {
         p = get_token(&line, &next);
         if (!(*p && *p != ';'))
@@ -1815,7 +1818,7 @@ quit:
 static int pe_load_dll(TCCState *s1, int fd, const char *filename)
 {
     char *p, *q;
-    DLLReference *ref = tcc_add_dllref(s1, filename, 0);
+    DLLReference *ref = tcc_add_dllref(s1, tcc_basename(filename), 0);
     if (ref->found)
         return 0;
     if (get_dllexports(fd, &p))

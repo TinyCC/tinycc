@@ -201,7 +201,8 @@ ST_FUNC char *tcc_load_text(int fd)
 {
     int len = lseek(fd, 0, SEEK_END);
     char *buf = load_data(fd, 0, len + 1);
-    buf[len] = 0;
+    if (buf)
+        buf[len] = 0;
     return buf;
 }
 
@@ -336,7 +337,8 @@ PUB_FUNC void *tcc_malloc_debug(unsigned long size, const char *file, int line)
 {
     int ofs;
     mem_debug_header_t *header;
-
+    if (!size)
+        return NULL;
     header = tcc_malloc(sizeof(mem_debug_header_t) + size);
     header->magic1 = MEM_DEBUG_MAGIC1;
     header->magic2 = MEM_DEBUG_MAGIC2;
@@ -346,7 +348,6 @@ PUB_FUNC void *tcc_malloc_debug(unsigned long size, const char *file, int line)
     ofs = strlen(file) - MEM_DEBUG_FILE_LEN;
     strncpy(header->file_name, file + (ofs > 0 ? ofs : 0), MEM_DEBUG_FILE_LEN);
     header->file_name[MEM_DEBUG_FILE_LEN] = 0;
-
     WAIT_SEM(&mem_sem);
     header->next = mem_debug_chain;
     header->prev = NULL;
@@ -357,7 +358,6 @@ PUB_FUNC void *tcc_malloc_debug(unsigned long size, const char *file, int line)
     if (mem_cur_size > mem_max_size)
         mem_max_size = mem_cur_size;
     POST_SEM(&mem_sem);
-
     return MEM_USER_PTR(header);
 }
 
@@ -367,7 +367,6 @@ PUB_FUNC void tcc_free_debug(void *ptr)
     if (!ptr)
         return;
     header = malloc_check(ptr, "tcc_free");
-
     WAIT_SEM(&mem_sem);
     mem_cur_size -= header->size;
     header->size = (unsigned)-1;
@@ -385,7 +384,8 @@ PUB_FUNC void *tcc_mallocz_debug(unsigned long size, const char *file, int line)
 {
     void *ptr;
     ptr = tcc_malloc_debug(size,file,line);
-    memset(ptr, 0, size);
+    if (size)
+        memset(ptr, 0, size);
     return ptr;
 }
 
@@ -393,10 +393,14 @@ PUB_FUNC void *tcc_realloc_debug(void *ptr, unsigned long size, const char *file
 {
     mem_debug_header_t *header;
     int mem_debug_chain_update = 0;
+
     if (!ptr)
         return tcc_malloc_debug(size, file, line);
+    if (!size) {
+        tcc_free_debug(ptr);
+        return NULL;
+    }
     header = malloc_check(ptr, "tcc_realloc");
-
     WAIT_SEM(&mem_sem);
     mem_cur_size -= header->size;
     mem_debug_chain_update = (header == mem_debug_chain);
@@ -413,7 +417,6 @@ PUB_FUNC void *tcc_realloc_debug(void *ptr, unsigned long size, const char *file
     if (mem_cur_size > mem_max_size)
         mem_max_size = mem_cur_size;
     POST_SEM(&mem_sem);
-
     return MEM_USER_PTR(header);
 }
 
@@ -441,6 +444,7 @@ PUB_FUNC void tcc_memcheck(int d)
         }
         fflush(stderr);
         mem_cur_size = 0;
+        mem_max_size = 0;
         mem_debug_chain = NULL;
 #if MEM_DEBUG-0 == 2
         exit(2);
@@ -1425,24 +1429,24 @@ static int tcc_set_linker(TCCState *s, const char *option)
             s->pe_stack_size = strtoul(p, &end, 10);
         } else if (link_option(option, "subsystem=", &p)) {
 #if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64)
-            if (!strcmp(p, "native")) {
+            if (strstart("native", &p)) {
                 s->pe_subsystem = 1;
-            } else if (!strcmp(p, "console")) {
+            } else if (strstart("console", &p)) {
                 s->pe_subsystem = 3;
-            } else if (!strcmp(p, "gui") || !strcmp(p, "windows")) {
+            } else if (strstart("gui", &p) || strstart("windows", &p)) {
                 s->pe_subsystem = 2;
-            } else if (!strcmp(p, "posix")) {
+            } else if (strstart("posix", &p)) {
                 s->pe_subsystem = 7;
-            } else if (!strcmp(p, "efiapp")) {
+            } else if (strstart("efiapp", &p)) {
                 s->pe_subsystem = 10;
-            } else if (!strcmp(p, "efiboot")) {
+            } else if (strstart("efiboot", &p)) {
                 s->pe_subsystem = 11;
-            } else if (!strcmp(p, "efiruntime")) {
+            } else if (strstart("efiruntime", &p)) {
                 s->pe_subsystem = 12;
-            } else if (!strcmp(p, "efirom")) {
+            } else if (strstart("efirom", &p)) {
                 s->pe_subsystem = 13;
 #elif defined(TCC_TARGET_ARM)
-            if (!strcmp(p, "wince")) {
+            if (strstart("wince", &p)) {
                 s->pe_subsystem = 9;
 #endif
             } else
@@ -2211,3 +2215,9 @@ PUB_FUNC void tcc_print_stats(TCCState *s1, unsigned total_time)
     fprintf(stderr, " %d max (bytes)\n", mem_max_size);
 #endif
 }
+
+#if ONE_SOURCE
+# undef malloc
+# undef realloc
+# undef free
+#endif

@@ -237,3 +237,6 @@ arg[1] = "Y"
 
 [test_pp_error_2]
 60_errors_and_warnings.c:483: error: bad preprocessor expression: #if 0 ( 1 , 2 )
+
+[test_pointer_plus_double]
+60_errors_and_warnings.c:490: error: invalid operand types for binary operation

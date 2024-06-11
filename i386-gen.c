@@ -410,9 +410,7 @@ ST_FUNC void gfunc_call(int nb_args)
 {
     int size, align, r, args_size, i, func_call;
     Sym *func_sym;
-    // Look ahead to the function on the stack to get the function call type
-    int func_call2 = ((vtop - nb_args)->type.ref)->f.func_call;
-    
+
 #ifdef CONFIG_TCC_BCHECK
     if (tcc_state->do_bounds_check)
         gbound_args(nb_args);
@@ -420,12 +418,6 @@ ST_FUNC void gfunc_call(int nb_args)
 
     args_size = 0;
     for(i = 0;i < nb_args; i++) {
-        if (func_call2 == FUNC_THISCALL && i == (nb_args - 1)) {
-            // If thiscall, zap the last push, as it is `this`. Instead, mov into ecx
-            size = 0;
-            load(get_reg(RC_ECX), vtop);
-        }
-        else 
         if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
             size = type_size(&vtop->type, &align);
             /* align to stack align size */
@@ -486,12 +478,15 @@ ST_FUNC void gfunc_call(int nb_args)
     func_call = func_sym->f.func_call;
     /* fast call case */
     if ((func_call >= FUNC_FASTCALL1 && func_call <= FUNC_FASTCALL3) ||
-        func_call == FUNC_FASTCALLW) {
+        func_call == FUNC_FASTCALLW || func_call == FUNC_THISCALL) {
         int fastcall_nb_regs;
         const uint8_t *fastcall_regs_ptr;
         if (func_call == FUNC_FASTCALLW) {
             fastcall_regs_ptr = fastcallw_regs;
             fastcall_nb_regs = 2;
+        } else if (func_call == FUNC_THISCALL) {
+            fastcall_regs_ptr = fastcallw_regs;
+            fastcall_nb_regs = 1;
         } else {
             fastcall_regs_ptr = fastcall_regs;
             fastcall_nb_regs = func_call - FUNC_FASTCALL1 + 1;
@@ -531,7 +526,6 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
     const uint8_t *fastcall_regs_ptr;
     Sym *sym;
     CType *type;
-    int thiscall_nb_regs;
 
     sym = func_type->ref;
     func_call = sym->f.func_call;
@@ -545,15 +539,13 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
     } else if (func_call == FUNC_FASTCALLW) {
         fastcall_nb_regs = 2;
         fastcall_regs_ptr = fastcallw_regs;
+    } else if (func_call == FUNC_THISCALL) {
+        fastcall_nb_regs = 1;
+        fastcall_regs_ptr = fastcallw_regs;
     } else {
         fastcall_nb_regs = 0;
         fastcall_regs_ptr = NULL;
     }
-
-    if (func_call == FUNC_THISCALL) {
-        thiscall_nb_regs = 1;
-    }
-
     param_index = 0;
 
     ind += FUNC_PROLOG_SIZE;
@@ -588,14 +580,6 @@ ST_FUNC void gfunc_prolog(Sym *func_sym)
             loc -= 4;
             o(0x89);     /* movl */
             gen_modrm(fastcall_regs_ptr[param_index], VT_LOCAL, NULL, loc);
-            param_addr = loc;
-        } 
-        else if(param_index < thiscall_nb_regs) {
-            /* Why ? */
-            /* save THISCALL register; ECX */
-            loc -= 4;
-            o(0x89);     /* movl */
-            gen_modrm(TREG_ECX, VT_LOCAL, NULL, loc);
             param_addr = loc;
         } else {
             param_addr = addr;

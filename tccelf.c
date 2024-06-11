@@ -153,8 +153,11 @@ ST_FUNC void tccelf_begin_file(TCCState *s1)
     s = s1->symtab, s->reloc = s->hash, s->hash = NULL;
 #if defined TCC_TARGET_X86_64 && defined TCC_TARGET_PE
     s1->uw_sym = 0;
+    s1->uw_offs = 0;
 #endif
 }
+
+static void update_relocs(TCCState *s1, Section *s, int *old_to_new_syms, int first_sym);
 
 /* At the end of compilation, convert any UNDEF syms to global, and merge
    with previously existing symbols */
@@ -172,7 +175,6 @@ ST_FUNC void tccelf_end_file(TCCState *s1)
 
     for (i = 0; i < nb_syms; ++i) {
         ElfSym *sym = (ElfSym*)s->data + first_sym + i;
-
         if (sym->st_shndx == SHN_UNDEF) {
             int sym_bind = ELFW(ST_BIND)(sym->st_info);
             int sym_type = ELFW(ST_TYPE)(sym->st_info);
@@ -187,26 +189,12 @@ ST_FUNC void tccelf_end_file(TCCState *s1)
 #endif
             sym->st_info = ELFW(ST_INFO)(sym_bind, sym_type);
         }
-
         tr[i] = set_elf_sym(s, sym->st_value, sym->st_size, sym->st_info,
             sym->st_other, sym->st_shndx, (char*)s->link->data + sym->st_name);
     }
     /* now update relocations */
-    for (i = 1; i < s1->nb_sections; i++) {
-        Section *sr = s1->sections[i];
-        if (sr->sh_type == SHT_RELX && sr->link == s) {
-            ElfW_Rel *rel = (ElfW_Rel*)(sr->data + sr->sh_offset);
-            ElfW_Rel *rel_end = (ElfW_Rel*)(sr->data + sr->data_offset);
-            for (; rel < rel_end; ++rel) {
-                int n = ELFW(R_SYM)(rel->r_info) - first_sym;
-                if (n < 0) /* zero sym_index in reloc (can happen with asm) */
-                    continue;
-                rel->r_info = ELFW(R_INFO)(tr[n], ELFW(R_TYPE)(rel->r_info));
-            }
-        }
-    }
+    update_relocs(s1, s, tr, first_sym);
     tcc_free(tr);
-
     /* record text/data/bss output for -bench info */
     for (i = 0; i < 4; ++i) {
         s = s1->sections[i + 1];
@@ -801,7 +789,7 @@ ST_FUNC struct sym_attr *get_sym_attr(TCCState *s1, int index, int alloc)
     return &s1->sym_attrs[index];
 }
 
-static void modify_reloctions_old_to_new(TCCState *s1, Section *s, int *old_to_new_syms)
+static void update_relocs(TCCState *s1, Section *s, int *old_to_new_syms, int first_sym)
 {
     int i, type, sym_index;
     Section *sr;
@@ -813,6 +801,8 @@ static void modify_reloctions_old_to_new(TCCState *s1, Section *s, int *old_to_n
             for_each_elem(sr, 0, rel, ElfW_Rel) {
                 sym_index = ELFW(R_SYM)(rel->r_info);
                 type = ELFW(R_TYPE)(rel->r_info);
+                if ((sym_index -= first_sym) < 0)
+                    continue; /* zero sym_index in reloc (can happen with asm) */
                 sym_index = old_to_new_syms[sym_index];
                 rel->r_info = ELFW(R_INFO)(sym_index, type);
             }
@@ -863,8 +853,7 @@ static void sort_syms(TCCState *s1, Section *s)
     memcpy(s->data, new_syms, nb_syms * sizeof(ElfW(Sym)));
     tcc_free(new_syms);
 
-    modify_reloctions_old_to_new(s1, s, old_to_new_syms);
-
+    update_relocs(s1, s, old_to_new_syms, 0);
     tcc_free(old_to_new_syms);
 }
 
@@ -1012,7 +1001,7 @@ static void update_gnu_hash(TCCState *s1, Section *gnu_hash)
     tcc_free(buck);
     tcc_free(nextbuck);
 
-    modify_reloctions_old_to_new(s1, dynsym, old_to_new_syms);
+    update_relocs(s1, dynsym, old_to_new_syms, 0);
 
     /* modify the versions */
     vs = versym_section;

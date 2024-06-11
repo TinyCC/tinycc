@@ -92,7 +92,6 @@ static const unsigned char tok_two_chars[] =
     '-','>', TOK_ARROW,
     '.','.', TOK_TWODOTS,
     '#','#', TOK_TWOSHARPS,
-    '#','#', TOK_PPJOIN,
     0
 };
 
@@ -137,10 +136,8 @@ ST_FUNC void expect(const char *msg)
 
 #define TOKSYM_TAL_SIZE     (768 * 1024) /* allocator for tiny TokenSym in table_ident */
 #define TOKSTR_TAL_SIZE     (768 * 1024) /* allocator for tiny TokenString instances */
-#define CSTR_TAL_SIZE       (256 * 1024) /* allocator for tiny CString instances */
-#define TOKSYM_TAL_LIMIT    256 /* prefer unique limits to distinguish allocators debug msgs */
-#define TOKSTR_TAL_LIMIT    128 /* 32 * sizeof(int) */
-#define CSTR_TAL_LIMIT      1024
+#define TOKSYM_TAL_LIMIT     256 /* prefer unique limits to distinguish allocators debug msgs */
+#define TOKSTR_TAL_LIMIT    1024 /* 256 * sizeof(int) */
 
 typedef struct TinyAlloc {
     unsigned  limit;
@@ -185,8 +182,8 @@ tail_call:
     if (!al)
         return;
 #ifdef TAL_INFO
-    fprintf(stderr, "limit=%5d, size=%5g MB, nb_peak=%6d, nb_total=%8d, nb_missed=%6d, usage=%5.1f%%\n",
-            al->limit, al->size / 1024.0 / 1024.0, al->nb_peak, al->nb_total, al->nb_missed,
+    fprintf(stderr, "limit %4d  size %7d  nb_peak %5d  nb_total %7d  nb_missed %5d  usage %5.1f%%\n",
+            al->limit, al->size, al->nb_peak, al->nb_total, al->nb_missed,
             (al->peak_p - al->buffer) * 100.0 / al->size);
 #endif
 #if TAL_DEBUG && TAL_DEBUG != 3 /* do not check TAL leaks with -DMEM_DEBUG=3 */
@@ -345,7 +342,7 @@ ST_INLN void cstr_ccat(CString *cstr, int ch)
     size = cstr->size + 1;
     if (size > cstr->size_allocated)
         cstr_realloc(cstr, size);
-    ((unsigned char *)cstr->data)[size - 1] = ch;
+    cstr->data[size - 1] = ch;
     cstr->size = size;
 }
 
@@ -368,6 +365,7 @@ ST_INLN void cstr_u8cat(CString *cstr, int ch)
     cstr_cat(cstr, buf, e - buf);
 }
 
+/* add string of 'len', or of its len/len+1 when 'len' == -1/0 */
 ST_FUNC void cstr_cat(CString *cstr, const char *str, int len)
 {
     int size;
@@ -376,7 +374,7 @@ ST_FUNC void cstr_cat(CString *cstr, const char *str, int len)
     size = cstr->size + len;
     if (size > cstr->size_allocated)
         cstr_realloc(cstr, size);
-    memmove(((unsigned char *)cstr->data) + cstr->size, str, len);
+    memmove(cstr->data + cstr->size, str, len);
     cstr->size = size;
 }
 
@@ -387,7 +385,7 @@ ST_FUNC void cstr_wccat(CString *cstr, int ch)
     size = cstr->size + sizeof(nwchar_t);
     if (size > cstr->size_allocated)
         cstr_realloc(cstr, size);
-    *(nwchar_t *)(((unsigned char *)cstr->data) + size - sizeof(nwchar_t)) = ch;
+    *(nwchar_t *)(cstr->data + size - sizeof(nwchar_t)) = ch;
     cstr->size = size;
 }
 
@@ -418,7 +416,7 @@ ST_FUNC int cstr_vprintf(CString *cstr, const char *fmt, va_list ap)
             cstr_realloc(cstr, size);
         size = cstr->size_allocated - cstr->size;
         va_copy(v, ap);
-        len = vsnprintf((char*)cstr->data + cstr->size, size, fmt, v);
+        len = vsnprintf(cstr->data + cstr->size, size, fmt, v);
         va_end(v);
         if (len >= 0 && len < size)
             break;
@@ -1920,7 +1918,8 @@ ST_FUNC void preprocess(int is_bof)
         if (file->fd > 0)
             total_lines += file->line_num - n;
         file->line_num = n;
-        break;
+        goto ignore; /* skip optional level number */
+
     case TOK_ERROR:
     case TOK_WARNING:
         q = buf;
@@ -3070,12 +3069,13 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
 /* handle the '##' operator. return the resulting string (which must be freed). */
 static inline int *macro_twosharps(const int *ptr0)
 {
-    int t1, t2, n;
+    int t1, t2, n, l;
     CValue cv1, cv2;
     TokenString macro_str1;
     const int *ptr;
 
     tok_str_new(&macro_str1);
+    cstr_reset(&tokcstr);
     for (ptr = ptr0;;) {
         TOK_GET(&t1, &ptr, &cv1);
         if (t1 == 0)
@@ -3090,29 +3090,31 @@ static inline int *macro_twosharps(const int *ptr0)
             while ((t2 = *++ptr) == ' ' || t2 == TOK_PPJOIN)
                 ;
             TOK_GET(&t2, &ptr, &cv2);
-            if (t1 == TOK_PLCHLDR && t2 == TOK_PLCHLDR)
+            if (t2 == TOK_PLCHLDR)
                 continue;
-            cstr_reset(&tokcstr);
-            if (t1 != TOK_PLCHLDR)
+            if (t1 != TOK_PLCHLDR) {
                 cstr_cat(&tokcstr, get_tok_str(t1, &cv1), -1);
-            n = tokcstr.size;
-            if (t2 != TOK_PLCHLDR)
-                cstr_cat(&tokcstr, get_tok_str(t2, &cv2), -1);
-            cstr_ccat(&tokcstr, '\0');
-            //printf("paste <%s>\n", (char*)tokcstr.data);
+                t1 = TOK_PLCHLDR;
+            }
+            cstr_cat(&tokcstr, get_tok_str(t2, &cv2), -1);
+        }
+        if (tokcstr.size) {
+            cstr_ccat(&tokcstr, 0);
             tcc_open_bf(tcc_state, ":paste:", tokcstr.size);
             memcpy(file->buffer, tokcstr.data, tokcstr.size);
             tok_flags = 0; /* don't interpret '#' */
-            next_nomacro();
-            if (*file->buf_ptr == 0) {
-                t1 = tok, cv1 = tokc;
-            } else {
+            for (n = 0;;n = l) {
+                next_nomacro();
+                tok_str_add2(&macro_str1, tok, &tokc);
+                if (*file->buf_ptr == 0)
+                    break;
+                tok_str_add(&macro_str1, ' ');
+                l = file->buf_ptr - file->buffer;
                 tcc_warning("pasting \"%.*s\" and \"%s\" does not give a valid"
-                    " preprocessing token", n, file->buffer, file->buffer + n);
-                tok_str_add2(&macro_str1, t1, &cv1);
-                t1 = t2, cv1 = cv2;
+                    " preprocessing token", l - n, file->buffer + n, file->buf_ptr);
             }
             tcc_close();
+            cstr_reset(&tokcstr);
         }
         if (t1 != TOK_PLCHLDR)
             tok_str_add2(&macro_str1, t1, &cv1);
@@ -3450,9 +3452,8 @@ redo:
             /* do nothing */
         } else {
             ++macro_ptr;
-            if (t >= TOK_IDENT) {
-                t &= ~SYM_FIELD; /* remove 'nosubst' marker */
-            } else if (t == '\\') {
+            t &= ~SYM_FIELD; /* remove 'nosubst' marker */
+            if (t == '\\') {
                 if (!(parse_flags & PARSE_FLAG_ACCEPT_STRAYS))
                     tcc_error("stray '\\' in program");
             }

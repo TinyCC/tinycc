@@ -198,6 +198,7 @@ DEFINES += $(if $(ELF-$T),-DCONFIG_TCC_ELFINTERP="\"$(ELF-$T)\"")
 DEFINES += $(DEF-$(or $(findstring win,$T),unx))
 
 ifneq ($(X),)
+$(if $(DEF-$T),,$(error error: unknown target: '$T'))
 DEF-all += -DCONFIG_TCC_CROSSPREFIX="\"$X\""
 ifneq ($(CONFIG_WIN32),yes)
 DEF-win += -DCONFIG_TCCDIR="\"$(tccdir)/win32\""
