@@ -8303,6 +8303,7 @@ static void gen_function(Sym *sym)
     cur_scope = root_scope = &f;
     nocode_wanted = 0;
 
+    cur_text_section->sh_flags |= SHF_EXECINSTR;
     ind = cur_text_section->data_offset;
     if (sym->a.aligned) {
 	size_t newoff = section_add(cur_text_section, 0,
