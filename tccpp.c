@@ -1506,6 +1506,20 @@ static int expr_preprocess(TCCState *s1)
             tokc.i = c;
         } else {
             /* if undefined macro, replace with zero */
+            next_nomacro();
+            // If the undefined macro is followed by parens, just skip them.
+            if (tok == '(') {
+                int bracket_depth = 1;
+                while (bracket_depth > 0) {
+                    next();
+                    if (tok == '(')
+                        bracket_depth++;
+                    else if (tok == ')')
+                        bracket_depth--;
+                }
+            } else {
+                unget_tok(tok); // Is this actually the function I want?
+            }
             tok = TOK_CINT;
             tokc.i = 0;
         }
