@@ -883,8 +883,12 @@ static void asm_parse_directive(TCCState *s1, int global)
                 }
             }
             last_text_section = cur_text_section;
-	    if (tok1 == TOK_ASMDIR_section)
+	    if (tok1 == TOK_ASMDIR_section) {
 	        use_section(s1, sname);
+            /* The section directive supports flags, but they are unsupported.
+            For now, just assume any section contains code. */
+            cur_text_section->sh_flags |= SHF_EXECINSTR;
+        }
 	    else
 	        push_section(s1, sname);
 	    /* If we just allocated a new section reset its alignment to
@@ -893,9 +897,6 @@ static void asm_parse_directive(TCCState *s1, int global)
 	    if (old_nb_section != s1->nb_sections)
 	        cur_text_section->sh_addralign = 1;
         }
-        /* The section directive supports flags, but they are unsupported.
-        For now, just assume any section contains code. */
-        cur_text_section->sh_flags |= SHF_EXECINSTR;
         break;
     case TOK_ASMDIR_previous:
         { 

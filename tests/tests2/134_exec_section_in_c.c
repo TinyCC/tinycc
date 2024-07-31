@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 /* Previously in TinyCC, ELF sections defined in attributes would always have
 the execute bit not set, so you would get segmentation faults when code in these
 sections was exectuted. This file is a minimal example of a file that will put
@@ -9,5 +11,7 @@ int wumbo (int arg) {
 }
 
 int main () {
-    return wumbo(2);
+    wumbo(2);
+    puts("hi");
+    return 0;
 }
