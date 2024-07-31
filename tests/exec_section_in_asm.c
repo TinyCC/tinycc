@@ -1,3 +1,4 @@
+/* This test only works on x86-64. */
 /* Previously in TinyCC, ELF sections defined in assembly would always have the
 execute bit not set, so you would get segmentation faults when code in these
 sections was exectuted. This file is a minimal example of a file that will put
