@@ -1740,6 +1740,8 @@ static const char dumpmachine_str[] =
     "openbsd"
 #elif TARGETOS_NetBSD
     "netbsd"
+#elif TCC_MUSL
+    "linux-musl"
 #else
     "linux-gnu"
 #endif
