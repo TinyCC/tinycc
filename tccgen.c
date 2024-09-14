@@ -3249,7 +3249,10 @@ error:
                 vtop->c.i = (vtop->c.ld != 0);
             } else {
                 if(sf)
-                    vtop->c.i = vtop->c.ld;
+                    /* the range of [int64_t] is enough to hold the integer part of any float value.
+                       Meanwhile, converting negative double to unsigned integer is UB.
+                       So first convert to [int64_t] here. */
+                    vtop->c.i = (int64_t)vtop->c.ld;
                 else if (sbt_bt == VT_LLONG || (PTR_SIZE == 8 && sbt == VT_PTR))
                     ;
                 else if (sbt & VT_UNSIGNED)
