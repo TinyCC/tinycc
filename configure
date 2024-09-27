@@ -56,7 +56,9 @@ build_cross=
 # use CC/AR from environment when set
 test -n "$CC" && cc="$CC"
 test -n "$AR" && ar="$AR"
-test -n "CFLAGS" && CFLAGS="-Wall -O2"
+
+# set default CFLAGS if unset in environment
+test -z "$CFLAGS" && CFLAGS="-Wall -O2"
 
 # find source path
 source_path=${0%configure}
