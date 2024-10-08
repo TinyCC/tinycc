@@ -14,7 +14,7 @@ jobs:
       run: ./configure && make && make test -k
 
   test-x86_64-osx:
-    runs-on: macos-11
+    runs-on: macos-12
     timeout-minutes: 2
     steps:
     - uses: actions/checkout@v4
