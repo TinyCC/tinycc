@@ -5716,6 +5716,12 @@ ST_FUNC void unary(void)
 	vtop--;
 	vpushi(n);
         break;
+    case TOK_builtin_unreachable:
+	parse_builtin_params(0, ""); /* just skip '()' */
+        type.t = VT_VOID;
+        vpush(&type);
+        CODE_OFF();
+        break;
     case TOK_builtin_frame_address:
     case TOK_builtin_return_address:
         {
@@ -8306,7 +8312,6 @@ static void gen_function(Sym *sym)
     cur_scope = root_scope = &f;
     nocode_wanted = 0;
 
-    cur_text_section->sh_flags |= SHF_EXECINSTR;
     ind = cur_text_section->data_offset;
     if (sym->a.aligned) {
 	size_t newoff = section_add(cur_text_section, 0,
@@ -8602,6 +8607,8 @@ static int decl(int l)
                     cur_text_section = ad.section;
                     if (!cur_text_section)
                         cur_text_section = text_section;
+                    else if (cur_text_section->sh_num > bss_section->sh_num)
+                        cur_text_section->sh_flags = text_section->sh_flags;
                     gen_function(sym);
                 }
                 break;

@@ -489,7 +489,7 @@ void load(int r, SValue *sv)
                 }
 #endif
             } else if (is64_type(ft)) {
-                if (sv->c.i > UINT32_MAX) {
+                if (sv->c.i >> 32) {
                     orex(1,r,0, 0xb8 + REG_VALUE(r)); /* movabs $xx, r */
                     gen_le64(sv->c.i);
                 } else if (sv->c.i > 0) {
@@ -1017,7 +1017,7 @@ void gfunc_prolog(Sym *func_sym)
 /* generate function epilog */
 void gfunc_epilog(void)
 {
-    int v, saved_ind;
+    int v, start;
 
     /* align local size to word & save local variables */
     func_scratch = (func_scratch + 15) & -16;
@@ -1037,10 +1037,12 @@ void gfunc_epilog(void)
         g(func_ret_sub >> 8);
     }
 
-    saved_ind = ind;
-    ind = func_sub_sp_offset - FUNC_PROLOG_SIZE;
     v = -loc;
+    start = func_sub_sp_offset - FUNC_PROLOG_SIZE;
+    cur_text_section->data_offset = ind;
+    pe_add_unwind_data(start, ind, v);
 
+    ind = start;
     if (v >= 4096) {
         Sym *sym = external_helper_sym(TOK___chkstk);
         oad(0xb8, v); /* mov stacksize, %eax */
@@ -1052,13 +1054,10 @@ void gfunc_epilog(void)
         o(0xec8148);  /* sub rsp, stacksize */
         gen_le32(v);
     }
+    ind = cur_text_section->data_offset;
 
     /* add the "func_scratch" area after each alloca seen */
     gsym_addr(func_alloca, -func_scratch);
-
-    cur_text_section->data_offset = saved_ind;
-    pe_add_unwind_data(ind, saved_ind, v);
-    ind = cur_text_section->data_offset;
 }
 
 #else

@@ -1488,7 +1488,7 @@ static void add_init_array_defines(TCCState *s1, const char *section_name)
     s = have_section(s1, section_name);
     if (!s || !(s->sh_flags & SHF_ALLOC)) {
         end_offset = 0;
-        s = data_section;
+        s = text_section;
     } else {
         end_offset = s->data_offset;
     }
@@ -1823,11 +1823,14 @@ static void tcc_add_linker_symbols(TCCState *s1)
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
         if ((s->sh_flags & SHF_ALLOC)
-            && (s->sh_type == SHT_PROGBITS
+            && (s->sh_type == SHT_PROGBITS || s->sh_type == SHT_NOBITS
                 || s->sh_type == SHT_STRTAB)) {
-            const char *p;
             /* check if section name can be expressed in C */
-            p = s->name;
+            const char *p0, *p;
+            p0 = s->name;
+            if (*p0 == '.')
+                ++p0;
+            p = p0;
             for(;;) {
                 int c = *p;
                 if (!c)
@@ -1836,9 +1839,9 @@ static void tcc_add_linker_symbols(TCCState *s1)
                     goto next_sec;
                 p++;
             }
-            snprintf(buf, sizeof(buf), "__start_%s", s->name);
+            snprintf(buf, sizeof(buf), "__start_%s", p0);
             set_global_sym(s1, buf, s, 0);
-            snprintf(buf, sizeof(buf), "__stop_%s", s->name);
+            snprintf(buf, sizeof(buf), "__stop_%s", p0);
             set_global_sym(s1, buf, s, -1);
         }
     next_sec: ;
@@ -2123,6 +2126,7 @@ struct dyn_inf {
 
     ElfW(Phdr) *phdr;
     int phnum;
+    int shnum;
     Section *interp;
     Section *note;
     Section *gnu_hash;
@@ -2135,7 +2139,7 @@ struct dyn_inf {
    program headers are filled since they contain info about the layout.
    We do the following ordering: interp, symbol tables, relocations, progbits,
    nobits */
-static int sort_sections(TCCState *s1, int *sec_order, Section *interp)
+static int sort_sections(TCCState *s1, int *sec_order, struct dyn_inf *d)
 {
     Section *s;
     int i, j, k, f, f0, n;
@@ -2144,16 +2148,16 @@ static int sort_sections(TCCState *s1, int *sec_order, Section *interp)
 
     for (i = 1; i < nb_sections; i++) {
         s = s1->sections[i];
-        if (s->sh_flags & SHF_ALLOC) {
+        if (0 == s->sh_name) {
+            j = 0x900; /* no sh_name: won't go to file */
+        } else if (s->sh_flags & SHF_ALLOC) {
             j = 0x100;
             if (s->sh_flags & SHF_WRITE)
                 j = 0x200;
             if (s->sh_flags & SHF_TLS)
                 j += 0x200;
-        } else if (s->sh_name) {
-            j = 0x700;
         } else {
-            j = 0x900; /* no sh_name: won't go to file */
+            j = 0x700;
         }
         if (s->sh_type == SHT_SYMTAB || s->sh_type == SHT_DYNSYM) {
             k = 0x10;
@@ -2191,7 +2195,7 @@ static int sort_sections(TCCState *s1, int *sec_order, Section *interp)
                 k = 0x70;
             if (s->sh_type == SHT_NOBITS)
                 k = 0x80;
-            if (s == interp)
+            if (s == d->interp)
                 k = 0x00;
         }
         k += j;
@@ -2201,6 +2205,7 @@ static int sort_sections(TCCState *s1, int *sec_order, Section *interp)
         sec_cls[n] = k, sec_order[n] = i;
     }
     sec_order[0] = 0;
+    d->shnum = 1;
 
     /* count PT_LOAD headers needed */
     n = f0 = 0;
@@ -2208,21 +2213,25 @@ static int sort_sections(TCCState *s1, int *sec_order, Section *interp)
         s = s1->sections[sec_order[i]];
         k = sec_cls[i];
         f = 0;
+        if (k < 0x900)
+            ++d->shnum;
         if (k < 0x700) {
             f = s->sh_flags & (SHF_ALLOC|SHF_WRITE|SHF_EXECINSTR|SHF_TLS);
 #if TARGETOS_NetBSD
 	    /* NetBSD only supports 2 PT_LOAD sections.
 	       See: https://blog.netbsd.org/tnf/entry/the_first_report_on_lld */
-	    if ((f & SHF_WRITE) == 0) f |= SHF_EXECINSTR;
+	    if ((f & SHF_WRITE) == 0)
+                f |= SHF_EXECINSTR;
 #else
             if ((k & 0xfff0) == 0x240) /* RELRO sections */
                 f |= 1<<4;
 #endif
-            if (f != f0) /* start new header when flags changed or relro */
+            /* start new header when flags changed or relro, but avoid zero memsz */
+            if (f != f0 && s->sh_size)
                 f0 = f, ++n, f |= 1<<8;
         }
         sec_cls[i] = f;
-        //printf("ph %d sec %02d : %3X %3X  %8.2X  %04X  %s\n", !!f * n, i, f, k, s->sh_type, s->sh_size, s->name);
+        //printf("ph %d sec %02d : %3X %3X  %8.2X  %04X  %s\n", (f>0) * n, i, f, k, s->sh_type, s->sh_size, s->name);
     }
     return n;
 }
@@ -2253,7 +2262,7 @@ static int layout_sections(TCCState *s1, int *sec_order, struct dyn_inf *d)
     int file_offset;
 
     /* compute number of program headers */
-    phnum = sort_sections(s1, sec_order, d->interp);
+    phnum = sort_sections(s1, sec_order, d);
     phfill = 0; /* set to 1 to have dll's with a PT_PHDR */
     if (d->interp)
         phfill = 2;
@@ -2268,8 +2277,10 @@ static int layout_sections(TCCState *s1, int *sec_order, struct dyn_inf *d)
     d->phdr = tcc_mallocz(phnum * sizeof(ElfW(Phdr)));
 
     file_offset = 0;
-    if (s1->output_format == TCC_OUTPUT_FORMAT_ELF)
-        file_offset = sizeof(ElfW(Ehdr)) + phnum * sizeof(ElfW(Phdr));
+    if (s1->output_format == TCC_OUTPUT_FORMAT_ELF) {
+        file_offset = (sizeof(ElfW(Ehdr)) + phnum * sizeof(ElfW(Phdr)) + 3) & -4;
+        file_offset += d->shnum * sizeof (ElfW(Shdr));
+    }
 
     s_align = ELF_PAGE_SIZE;
     if (s1->section_align)
@@ -2392,7 +2403,7 @@ static int layout_sections(TCCState *s1, int *sec_order, struct dyn_inf *d)
         ph->p_align = 4;
         fill_phdr(ph, PT_PHDR, NULL);
     }
-    return file_offset;
+    return 0;
 }
 
 /* put dynamic tag */
@@ -2505,14 +2516,11 @@ static void update_reloc_sections(TCCState *s1, struct dyn_inf *dyninf)
 	}
     }
 }
-
-static int tidy_section_headers(TCCState *s1, int *sec_order);
 #endif /* ndef ELF_OBJ_ONLY */
 
 /* Create an ELF file on disk.
    This function handle ELF specific layout requirements */
-static int tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
-                           int file_offset, int *sec_order)
+static int tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr)
 {
     int i, shnum, offset, size, file_type;
     Section *s;
@@ -2523,18 +2531,11 @@ static int tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
     shnum = s1->nb_sections;
 
     memset(&ehdr, 0, sizeof(ehdr));
-
     if (phnum > 0) {
         ehdr.e_phentsize = sizeof(ElfW(Phdr));
         ehdr.e_phnum = phnum;
         ehdr.e_phoff = sizeof(ElfW(Ehdr));
-#ifndef ELF_OBJ_ONLY
-        shnum = tidy_section_headers(s1, sec_order);
-#endif
     }
-
-    /* align to 4 */
-    file_offset = (file_offset + 3) & -4;
 
     /* fill header */
     ehdr.e_ident[0] = ELFMAG0;
@@ -2577,32 +2578,15 @@ static int tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
 
     ehdr.e_machine = EM_TCC_TARGET;
     ehdr.e_version = EV_CURRENT;
-    ehdr.e_shoff = file_offset;
+    ehdr.e_shoff = (sizeof(ElfW(Ehdr)) + phnum * sizeof(ElfW(Phdr)) + 3) & -4;
     ehdr.e_ehsize = sizeof(ElfW(Ehdr));
     ehdr.e_shentsize = sizeof(ElfW(Shdr));
     ehdr.e_shnum = shnum;
     ehdr.e_shstrndx = shnum - 1;
 
-    fwrite(&ehdr, 1, sizeof(ElfW(Ehdr)), f);
+    offset = fwrite(&ehdr, 1, sizeof(ElfW(Ehdr)), f);
     if (phdr)
-        fwrite(phdr, 1, phnum * sizeof(ElfW(Phdr)), f);
-    offset = sizeof(ElfW(Ehdr)) + phnum * sizeof(ElfW(Phdr));
-
-    sort_syms(s1, symtab_section);
-
-    for(i = 1; i < shnum; i++) {
-        s = s1->sections[sec_order ? sec_order[i] : i];
-        if (s->sh_type != SHT_NOBITS) {
-            while (offset < s->sh_offset) {
-                fputc(0, f);
-                offset++;
-            }
-            size = s->sh_size;
-            if (size)
-                fwrite(s->data, 1, size, f);
-            offset += size;
-        }
-    }
+        offset += fwrite(phdr, 1, phnum * sizeof(ElfW(Phdr)), f);
 
     /* output section headers */
     while (offset < ehdr.e_shoff) {
@@ -2613,8 +2597,8 @@ static int tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
     for(i = 0; i < shnum; i++) {
         sh = &shdr;
         memset(sh, 0, sizeof(ElfW(Shdr)));
-        s = s1->sections[i];
-        if (s) {
+        if (i) {
+            s = s1->sections[i];
             sh->sh_name = s->sh_name;
             sh->sh_type = s->sh_type;
             sh->sh_flags = s->sh_flags;
@@ -2627,20 +2611,35 @@ static int tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr,
             sh->sh_offset = s->sh_offset;
             sh->sh_size = s->sh_size;
         }
-        fwrite(sh, 1, sizeof(ElfW(Shdr)), f);
+        offset += fwrite(sh, 1, sizeof(ElfW(Shdr)), f);
+    }
+
+    sort_syms(s1, s1->symtab);
+
+    /* output sections */
+    for(i = 1; i < s1->nb_sections; i++) {
+        s = s1->sections[i];
+        if (s->sh_type != SHT_NOBITS) {
+            while (offset < s->sh_offset) {
+                fputc(0, f);
+                offset++;
+            }
+            size = s->sh_size;
+            if (size)
+                offset += fwrite(s->data, 1, size, f);
+        }
     }
     return 0;
 }
 
-static int tcc_output_binary(TCCState *s1, FILE *f,
-                              const int *sec_order)
+static int tcc_output_binary(TCCState *s1, FILE *f)
 {
     Section *s;
     int i, offset, size;
 
     offset = 0;
     for(i=1;i<s1->nb_sections;i++) {
-        s = s1->sections[sec_order[i]];
+        s = s1->sections[i];
         if (s->sh_type != SHT_NOBITS &&
             (s->sh_flags & SHF_ALLOC)) {
             while (offset < s->sh_offset) {
@@ -2657,7 +2656,7 @@ static int tcc_output_binary(TCCState *s1, FILE *f,
 
 /* Write an elf, coff or "binary" file */
 static int tcc_write_elf_file(TCCState *s1, const char *filename, int phnum,
-                              ElfW(Phdr) *phdr, int file_offset, int *sec_order)
+                              ElfW(Phdr) *phdr)
 {
     int fd, mode, file_type, ret;
     FILE *f;
@@ -2679,59 +2678,50 @@ static int tcc_write_elf_file(TCCState *s1, const char *filename, int phnum,
     else
 #endif
     if (s1->output_format == TCC_OUTPUT_FORMAT_ELF)
-        ret = tcc_output_elf(s1, f, phnum, phdr, file_offset, sec_order);
+        ret = tcc_output_elf(s1, f, phnum, phdr);
     else
-        ret = tcc_output_binary(s1, f, sec_order);
+        ret = tcc_output_binary(s1, f);
     fclose(f);
 
     return ret;
 }
 
 #ifndef ELF_OBJ_ONLY
-/* Sort section headers by assigned sh_addr, remove sections
+/* order sections according to sec_order, remove sections
    that we aren't going to output.  */
-static int tidy_section_headers(TCCState *s1, int *sec_order)
+static void reorder_sections(TCCState *s1, int *sec_order)
 {
-    int i, nnew, l, *backmap;
+    int i, nnew, k, *backmap;
     Section **snew, *s;
     ElfW(Sym) *sym;
 
-    snew = tcc_malloc(s1->nb_sections * sizeof(snew[0]));
     backmap = tcc_malloc(s1->nb_sections * sizeof(backmap[0]));
-    for (i = 0, nnew = 0, l = s1->nb_sections; i < s1->nb_sections; i++) {
-	s = s1->sections[sec_order[i]];
+    for (i = 0, nnew = 0, snew = NULL; i < s1->nb_sections; i++) {
+	k = sec_order[i];
+	s = s1->sections[k];
 	if (!i || s->sh_name) {
-	    backmap[sec_order[i]] = nnew;
-	    snew[nnew] = s;
-	    ++nnew;
+	    backmap[k] = nnew;
+            dynarray_add(&snew, &nnew, s);
 	} else {
-	    backmap[sec_order[i]] = 0;
-	    snew[--l] = s;
+	    backmap[k] = 0;
+            /* just remember to free them later */
+	    dynarray_add(&s1->priv_sections, &s1->nb_priv_sections, s);
 	}
     }
-    for (i = 0; i < nnew; i++) {
+    for (i = 1; i < nnew; i++) {
 	s = snew[i];
-	if (s) {
-	    s->sh_num = i;
-            if (s->sh_type == SHT_RELX)
-		s->sh_info = backmap[s->sh_info];
-	}
+        s->sh_num = i;
+        if (s->sh_type == SHT_RELX)
+            s->sh_info = backmap[s->sh_info];
+        else if (s->sh_type == SHT_SYMTAB || s->sh_type == SHT_DYNSYM)
+            for_each_elem(s, 1, sym, ElfW(Sym))
+                if (sym->st_shndx < s1->nb_sections)
+                    sym->st_shndx = backmap[sym->st_shndx];
     }
-
-    for_each_elem(symtab_section, 1, sym, ElfW(Sym))
-	if (sym->st_shndx != SHN_UNDEF && sym->st_shndx < SHN_LORESERVE)
-	    sym->st_shndx = backmap[sym->st_shndx];
-    if ( !s1->static_link ) {
-        for_each_elem(s1->dynsym, 1, sym, ElfW(Sym))
-	    if (sym->st_shndx != SHN_UNDEF && sym->st_shndx < SHN_LORESERVE)
-	        sym->st_shndx = backmap[sym->st_shndx];
-    }
-    for (i = 0; i < s1->nb_sections; i++)
-	sec_order[i] = i;
     tcc_free(s1->sections);
     s1->sections = snew;
+    s1->nb_sections = nnew;
     tcc_free(backmap);
-    return nnew;
 }
 
 #ifdef TCC_TARGET_ARM
@@ -2797,7 +2787,7 @@ static void alloc_sec_names(TCCState *s1, int is_obj);
 /* XXX: suppress unneeded sections */
 static int elf_output_file(TCCState *s1, const char *filename)
 {
-    int i, ret, file_type, file_offset, *sec_order;
+    int i, ret, file_type, *sec_order;
     struct dyn_inf dyninf = {0};
     Section *interp, *dynstr, *dynamic;
     int textrel, got_sym, dt_flags_1;
@@ -2876,7 +2866,6 @@ static int elf_output_file(TCCState *s1, const char *filename)
 	version_add (s1);
 
     textrel = set_sec_sizes(s1);
-    alloc_sec_names(s1, 0);
 
     if (!s1->static_link) {
         /* add a list of needed dlls */
@@ -2915,10 +2904,12 @@ static int elf_output_file(TCCState *s1, const char *filename)
         dynstr->sh_size = dynstr->data_offset;
     }
 
+    /* create and fill .shstrtab section */
+    alloc_sec_names(s1, 0);
     /* this array is used to reorder sections in the output file */
     sec_order = tcc_malloc(sizeof(int) * 2 * s1->nb_sections);
     /* compute section to program header mapping */
-    file_offset = layout_sections(s1, sec_order, &dyninf);
+    layout_sections(s1, sec_order, &dyninf);
 
         if (dynamic) {
             /* put in GOT the dynamic section address and relocate PLT */
@@ -2950,8 +2941,10 @@ static int elf_output_file(TCCState *s1, const char *filename)
     if (dyninf.gnu_hash)
         update_gnu_hash(s1, dyninf.gnu_hash);
 
+    reorder_sections(s1, sec_order);
+
     /* Create the ELF file with name 'filename' */
-    ret = tcc_write_elf_file(s1, filename, dyninf.phnum, dyninf.phdr, file_offset, sec_order);
+    ret = tcc_write_elf_file(s1, filename, dyninf.phnum, dyninf.phdr);
  the_end:
     tcc_free(sec_order);
     tcc_free(dyninf.phdr);
@@ -2971,7 +2964,7 @@ static void alloc_sec_names(TCCState *s1, int is_obj)
         s = s1->sections[i];
         if (is_obj)
             s->sh_size = s->data_offset;
-	if (s == strsec || s->sh_size || (s->sh_flags & SHF_ALLOC))
+	if (s->sh_size || s == strsec || (s->sh_flags & SHF_ALLOC) || is_obj)
             s->sh_name = put_elf_str(strsec, s->name);
     }
     strsec->sh_size = strsec->data_offset;
@@ -2985,7 +2978,8 @@ static int elf_output_obj(TCCState *s1, const char *filename)
     s1->nb_errors = 0;
     /* Allocate strings for section names */
     alloc_sec_names(s1, 1);
-    file_offset = sizeof (ElfW(Ehdr));
+    file_offset = (sizeof (ElfW(Ehdr)) + 3) & -4;
+    file_offset += s1->nb_sections * sizeof(ElfW(Shdr));
     for(i = 1; i < s1->nb_sections; i++) {
         s = s1->sections[i];
         file_offset = (file_offset + 15) & -16;
@@ -2994,7 +2988,7 @@ static int elf_output_obj(TCCState *s1, const char *filename)
             file_offset += s->sh_size;
     }
     /* Create the ELF file with name 'filename' */
-    ret = tcc_write_elf_file(s1, filename, 0, NULL, file_offset, NULL);
+    ret = tcc_write_elf_file(s1, filename, 0, NULL);
     return ret;
 }
 

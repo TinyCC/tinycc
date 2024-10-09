@@ -227,10 +227,12 @@ fi
 
 # OS specific
 buildos=$(uname)
+cpu_sys=$(uname -m)
 
 case $buildos in
   Windows_NT|MINGW*|MSYS*|CYGWIN*)
     buildos="WIN32"
+    test "$MSYSTEM" = "MINGW32" && cpu_sys=i386
   ;;
   Linux)
     if test "$(uname -o)" = "Android"; then
@@ -248,7 +250,6 @@ else
   default targetos "$buildos"
 fi
 
-cpu_sys=$(uname -m)
 default cpu "$cpu_sys"
 cpu_set="$cpu"
 

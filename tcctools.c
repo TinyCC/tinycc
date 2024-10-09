@@ -504,28 +504,21 @@ ST_FUNC int tcc_tool_cross(TCCState *s1, char **argv, int option)
 #ifdef _WIN32
 #include <process.h>
 
-static char *str_replace(const char *str, const char *p, const char *r)
+/* quote quotes in string and quote string if it contains spaces */
+static char *quote_win32(const char *s0)
 {
-    const char *s, *s0;
-    char *d, *d0;
-    int sl, pl, rl;
-
-    sl = strlen(str);
-    pl = strlen(p);
-    rl = strlen(r);
-    for (d0 = NULL;; d0 = tcc_malloc(sl + 1)) {
-        for (d = d0, s = str; s0 = s, s = strstr(s, p), s; s += pl) {
-            if (d) {
-                memcpy(d, s0, sl = s - s0), d += sl;
-                memcpy(d, r, rl), d += rl;
-            } else
-                sl += rl - pl;
-        }
-        if (d) {
-            strcpy(d, s0);
-            return d0;
-        }
-    }
+    const char *s;
+    char *p, *q;
+    int a = 0, b = 0, c;
+    for (s = s0; !!(c = *s); ++s)
+        a += c == '"', b |= c == ' ';
+    q = p = tcc_malloc(s - s0 + a + b + b + 1);
+    *q = '"', q += b;
+    for (s = s0; !!(c = *s); *q++ = c, ++s)
+        if (c == '"')
+            *q++ = '\\';
+    *q = '"', q += b, *q = '\0';
+    return p;
 }
 
 static int execvp_win32(const char *prog, char **argv)
@@ -533,8 +526,7 @@ static int execvp_win32(const char *prog, char **argv)
     int ret; char **p;
     /* replace all " by \" */
     for (p = argv; *p; ++p)
-        if (strchr(*p, '"'))
-            *p = str_replace(*p, "\"", "\\\"");
+        *p = quote_win32(*p);
     ret = _spawnvp(P_NOWAIT, prog, (const char *const*)argv);
     if (-1 == ret)
         return ret;

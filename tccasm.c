@@ -857,6 +857,7 @@ static void asm_parse_directive(TCCState *s1, int global)
         {
             char sname[256];
 	    int old_nb_section = s1->nb_sections;
+            int flags = SHF_ALLOC;
 
 	    tok1 = tok;
             /* XXX: support more options */
@@ -870,10 +871,17 @@ static void asm_parse_directive(TCCState *s1, int global)
                 next();
             }
             if (tok == ',') {
+                const char *p;
                 /* skip section options */
                 next();
                 if (tok != TOK_STR)
                     expect("string constant");
+                for (p = tokc.str.data; *p; ++p) {
+                    if (*p == 'w')
+                        flags |= SHF_WRITE;
+                    if (*p == 'x')
+                        flags |= SHF_EXECINSTR;
+                }
                 next();
                 if (tok == ',') {
                     next();
@@ -883,19 +891,17 @@ static void asm_parse_directive(TCCState *s1, int global)
                 }
             }
             last_text_section = cur_text_section;
-	    if (tok1 == TOK_ASMDIR_section) {
+	    if (tok1 == TOK_ASMDIR_section)
 	        use_section(s1, sname);
-            /* The section directive supports flags, but they are unsupported.
-            For now, just assume any section contains code. */
-            cur_text_section->sh_flags |= SHF_EXECINSTR;
-        }
 	    else
 	        push_section(s1, sname);
 	    /* If we just allocated a new section reset its alignment to
 	       1.  new_section normally acts for GCC compatibility and
 	       sets alignment to PTR_SIZE.  The assembler behaves different. */
-	    if (old_nb_section != s1->nb_sections)
+	    if (old_nb_section != s1->nb_sections) {
 	        cur_text_section->sh_addralign = 1;
+	        cur_text_section->sh_flags = flags;
+            }
         }
         break;
     case TOK_ASMDIR_previous:

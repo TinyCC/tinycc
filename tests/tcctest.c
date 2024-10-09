@@ -3989,7 +3989,7 @@ void builtin_test(void)
     }
 }
 
-#if defined _WIN32
+#if defined _WIN32 || (defined __APPLE__ && GCC_MAJOR >= 15)
 void weak_test(void) {}
 #else
 extern int __attribute__((weak)) weak_f1(void);

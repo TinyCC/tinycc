@@ -525,7 +525,7 @@ static int pe_put_long_secname(char *secname, const char *name)
     const char *d = dwarf_secs;
     do {
         if (0 == strcmp(d, name)) {
-            sprintf(secname, "/%d", (int)(d - dwarf_secs + 4));
+            snprintf(secname, 8, "/%d", (int)(d - dwarf_secs + 4));
             return 1;
         }
         d = strchr(d, 0) + 1;
@@ -1871,10 +1871,11 @@ static unsigned pe_add_uwwind_info(TCCState *s1)
             0x04, // UBYTE Size of prolog
             0x02, // UBYTE Count of unwind codes
             0x05, // UBYTE: 4 Frame Register (rbp), UBYTE: 4 Frame Register offset (scaled)
-            // USHORT * n Unwind codes array
+            // USHORT * n Unwind codes array (descending order)
             // 0x0b, 0x01, 0xff, 0xff, // stack size
-            0x04, 0x03, // set frame ptr (mov rsp -> rbp)
-            0x01, 0x50  // push reg (rbp)
+            // UBYTE offset of end of instr in prolog + 1, UBYTE:4 operation, UBYTE:4 info
+            0x04, 0x03, // 3:0 UWOP_SET_FPREG (mov rsp -> rbp)
+            0x01, 0x50, // 0:5 UWOP_PUSH_NONVOL (push rbp)
         };
 
         Section *s = text_section;

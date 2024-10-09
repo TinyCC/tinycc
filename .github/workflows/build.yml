@@ -10,7 +10,7 @@ jobs:
     timeout-minutes: 2
     steps:
     - uses: actions/checkout@v4
-    - name: make & test tcc
+    - name: make & test tcc (x86_64-linux)
       run: ./configure && make && make test -k
 
   test-x86_64-osx:
@@ -18,21 +18,36 @@ jobs:
     timeout-minutes: 2
     steps:
     - uses: actions/checkout@v4
-    - name: make & test tcc
-      run: ./configure --config-codesign=no && make && make test -k
+    - name: make & test tcc (x86_64-osx)
+      run: ./configure && make && make test -k
 
-  test-x86_64-win32:
-    runs-on: windows-2019
-    timeout-minutes: 4
+  test-aarch64-osx:
+    runs-on: macos-14
+    timeout-minutes: 2
     steps:
     - uses: actions/checkout@v4
-    - name: make & test tcc
+    - name: make & test tcc (aarch64-osx)
+      run: ./configure && make && make test -k
+
+  test-x86-win32:
+    runs-on: windows-2019
+    timeout-minutes: 6
+    steps:
+    - uses: actions/checkout@v4
+    - name: make & test tcc (x86_64-win32)
       shell: cmd
       run: |
         set MSYS2_PATH_TYPE=inherit
         set MSYSTEM=MINGW64
         set CHERE_INVOKING=yes
         C:\msys64\usr\bin\bash -l -c "./configure && make && make test -k"
+    - name: make & test tcc (i386-win32)
+      shell: cmd
+      run: |
+        set MSYS2_PATH_TYPE=inherit
+        set MSYSTEM=MINGW32
+        set CHERE_INVOKING=yes
+        C:\msys64\usr\bin\bash -l -c "./configure && make clean all && make test -k"
 
   test-armv7-linux:
     runs-on: ubuntu-20.04
@@ -40,6 +55,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: uraimo/run-on-arch-action@v2
+      name: make & test tcc (armv7-linux)
       with:
         arch: armv7
         distro: ubuntu20.04
@@ -57,6 +73,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: uraimo/run-on-arch-action@v2
+      name: make & test tcc (aarch64-linux)
       with:
         arch: aarch64
         distro: ubuntu20.04
@@ -74,6 +91,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - uses: uraimo/run-on-arch-action@v2
+      name: make & test tcc (riscv64-linux)
       with:
         arch: riscv64
         distro: ubuntu20.04
