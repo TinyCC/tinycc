@@ -1977,7 +1977,7 @@ dorun:
             s->static_link = 1;
             break;
         case TCC_OPTION_std:
-            if (strcmp(optarg, "=c11") == 0)
+            if (strcmp(optarg, "=c11") == 0 || strcmp(optarg, "=gnu11") == 0)
                 s->cversion = 201112;
             break;
         case TCC_OPTION_shared:
