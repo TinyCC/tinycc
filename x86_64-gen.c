@@ -489,8 +489,15 @@ void load(int r, SValue *sv)
                 }
 #endif
             } else if (is64_type(ft)) {
-                orex(1,r,0, 0xb8 + REG_VALUE(r)); /* mov $xx, r */
-                gen_le64(sv->c.i);
+                if (sv->c.i > UINT32_MAX) {
+                    orex(1,r,0, 0xb8 + REG_VALUE(r)); /* movabs $xx, r */
+                    gen_le64(sv->c.i);
+                } else if (sv->c.i > 0) {
+                    orex(0,r,0, 0xb8 + REG_VALUE(r)); /* mov $xx, r */
+                    gen_le32(sv->c.i);
+                } else {
+                    o(0xc031 + REG_VALUE(r) * 0x900); /* xor r, r */
+                }
             } else {
                 orex(0,r,0, 0xb8 + REG_VALUE(r)); /* mov $xx, r */
                 gen_le32(fc);
