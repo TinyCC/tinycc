@@ -87,7 +87,7 @@ ST_FUNC int tcc_tool_ar(TCCState *s1, int argc, char **argv)
     ElfW(Shdr) *shdr;
     ElfW(Sym) *sym;
     int i, fsize, i_lib, i_obj;
-    char *buf, *shstr, *symtab = NULL, *strtab = NULL;
+    char *buf, *shstr, *symtab, *strtab;
     int symtabsize = 0;//, strtabsize = 0;
     char *anames = NULL;
     int *afpos = NULL;
@@ -174,6 +174,8 @@ no_ar:
 		    /* ignore date/uid/gid/mode */
 		}
 	    }
+            if (fsize & 1)
+                fgetc(fh);
             tcc_free(buf);
 	}
 	ret = 0;
@@ -232,6 +234,7 @@ finish:
 
         shdr = (ElfW(Shdr) *) (buf + ehdr->e_shoff + ehdr->e_shstrndx * ehdr->e_shentsize);
         shstr = (char *)(buf + shdr->sh_offset);
+        symtab = strtab = NULL;
         for (i = 0; i < ehdr->e_shnum; i++)
         {
             shdr = (ElfW(Shdr) *) (buf + ehdr->e_shoff + i * ehdr->e_shentsize);
@@ -252,7 +255,7 @@ finish:
             }
         }
 
-        if (symtab && symtabsize)
+        if (symtab && strtab)
         {
             int nsym = symtabsize / sizeof(ElfW(Sym));
             //printf("symtab: info size shndx name\n");
@@ -298,6 +301,8 @@ finish:
         tcc_free(buf);
         i_obj++;
         fpos += (fsize + sizeof(arhdro));
+        if (fpos & 1)
+            fputc(0, fo), ++fpos;
     }
     hofs = 8 + sizeof(arhdr) + strpos + (funccnt+1) * sizeof(int);
     fpos = 0;

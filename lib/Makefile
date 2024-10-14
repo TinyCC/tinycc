@@ -8,6 +8,7 @@ VPATH = $(TOPSRC)/lib $(TOPSRC)/win32/lib
 T = $(or $(CROSS_TARGET),$(NATIVE_TARGET),unknown)
 X = $(if $(CROSS_TARGET),$(CROSS_TARGET)-)
 
+TCC = $(TOP)/$(X)tcc$(EXESUF)
 XTCC ?= $(TOP)/$(X)tcc$(EXESUF)
 XCC = $(XTCC)
 XAR = $(XTCC) -ar
@@ -44,6 +45,9 @@ $(X)BT_O += runmain.o tcov.o
 
 DSO_O = dsohandle.o
 
+# not in libtcc1.a
+EXTRA_O = runmain.o bt-exe.o bt-dll.o bt-log.o bcheck.o
+
 I386_O = libtcc1.o alloca.o alloca-bt.o stdatomic.o atomic.o builtin.o $(BT_O)
 X86_64_O = libtcc1.o alloca.o alloca-bt.o stdatomic.o atomic.o builtin.o $(BT_O)
 ARM_O = libtcc1.o armeabi.o alloca.o armflush.o stdatomic.o atomic.o builtin.o $(BT_O)
@@ -67,23 +71,23 @@ OBJ-arm-eabihf = $(ARM_O) $(DSO_O)
 OBJ-arm-wince = $(ARM_O) $(WIN_O)
 OBJ-riscv64 = $(RISCV64_O) $(BCHECK_O) $(DSO_O)
 
-OBJ-extra = $(filter $(B_O) runmain.o,$(OBJ-$T))
+OBJ-extra = $(filter $(EXTRA_O),$(OBJ-$T))
 OBJ-libtcc1 = $(addprefix $(X),$(filter-out $(OBJ-extra),$(OBJ-$T)))
 
 ALL = $(addprefix $(TOP)/,$(X)libtcc1.a $(OBJ-extra))
 
 all: $(ALL)
 
-$(TOP)/$(X)libtcc1.a : $(OBJ-libtcc1)
-	$S$(XAR) rcs $@ $^
+$(TOP)/$(X)libtcc1.a : $(OBJ-libtcc1) $(TCC)
+	$S$(XAR) rcs $@ $(OBJ-libtcc1)
 
-$(X)%.o : %.c
+$(X)%.o : %.c $(TCC)
 	$S$(XCC) -c $< -o $@ $(XFLAGS)
 
-$(X)%.o : %.S
+$(X)%.o : %.S $(TCC)
 	$S$(XCC) -c $< -o $@ $(XFLAGS)
 
-$(TOP)/%.o : %.c
+$(TOP)/%.o : %.c $(TCC)
 	$S$(XCC) -c $< -o $@ $(XFLAGS)
 
 $(TOP)/bcheck.o : XFLAGS += $(BFLAGS) $(if $(CONFIG_musl),-DTCC_MUSL)
@@ -92,5 +96,8 @@ $(TOP)/bt-exe.o : $(TOP)/tccrun.c
 $(X)crt1w.o : crt1.c
 $(X)wincrt1w.o : wincrt1.c
 
+# don't try to make it
+$(TCC) : ;
+
 clean :
-	rm -f *.a *.o $(ALL)
+	rm -f *.o $(addprefix $(TOP)/,*libtcc1.a $(EXTRA_O))

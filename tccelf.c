@@ -3374,6 +3374,8 @@ static int read_ar_header(int fd, int offset, ArchiveHeader *hdr)
     len = full_read(fd, hdr, sizeof(ArchiveHeader));
     if (len != sizeof(ArchiveHeader))
         return len ? -1 : 0;
+    if (memcmp(hdr->ar_fmag, ARFMAG, sizeof hdr->ar_fmag))
+        return -1;
     p = hdr->ar_name;
     for (e = p + sizeof hdr->ar_name; e > p && e[-1] == ' ';)
         --e;
@@ -3451,8 +3453,6 @@ ST_FUNC int tcc_load_archive(TCCState *s1, int fd, int alacarte)
             return tcc_error_noabort("invalid archive");
         file_offset += len;
         size = strtol(hdr.ar_size, NULL, 0);
-        /* align to even */
-        size = (size + 1) & ~1;
         if (alacarte) {
             /* coff symbol table : we handle it */
             if (!strcmp(hdr.ar_name, "/"))
@@ -3465,7 +3465,8 @@ ST_FUNC int tcc_load_archive(TCCState *s1, int fd, int alacarte)
             if (tcc_load_object_file(s1, fd, file_offset) < 0)
                 return -1;
         }
-        file_offset += size;
+        /* align to even */
+        file_offset = (file_offset + size + 1) & ~1;
     }
 }
 
