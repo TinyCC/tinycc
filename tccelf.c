@@ -2527,6 +2527,8 @@ static int tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr)
     ElfW(Ehdr) ehdr;
     ElfW(Shdr) shdr, *sh;
 
+    sort_syms(s1, s1->symtab);
+
     file_type = s1->output_type;
     shnum = s1->nb_sections;
 
@@ -2613,8 +2615,6 @@ static int tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr)
         }
         offset += fwrite(sh, 1, sizeof(ElfW(Shdr)), f);
     }
-
-    sort_syms(s1, s1->symtab);
 
     /* output sections */
     for(i = 1; i < s1->nb_sections; i++) {
