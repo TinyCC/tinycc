@@ -2527,8 +2527,6 @@ static int tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr)
     ElfW(Ehdr) ehdr;
     ElfW(Shdr) shdr, *sh;
 
-    sort_syms(s1, s1->symtab);
-
     file_type = s1->output_type;
     shnum = s1->nb_sections;
 
@@ -2577,6 +2575,8 @@ static int tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr)
         if (s1->nb_errors)
             return -1;
     }
+
+    sort_syms(s1, s1->symtab);
 
     ehdr.e_machine = EM_TCC_TARGET;
     ehdr.e_version = EV_CURRENT;
