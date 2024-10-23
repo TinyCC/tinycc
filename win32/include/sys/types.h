@@ -102,6 +102,11 @@ typedef _mode_t	mode_t;
 #endif
 #endif
 
+/* required by (unbundled) unistd.h for usleep arg type */
+#ifndef __NO_ISOCEXT
+typedef unsigned int useconds_t;
+#endif
+
 #ifndef _TIMESPEC_DEFINED
 #define _TIMESPEC_DEFINED
 struct timespec {
