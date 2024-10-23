@@ -86,6 +86,20 @@
     more,  get MinGW's "w32api" package.  Extract the files from "include"
     into your "tcc/include/winapi" directory.
 
+    If the latest mingw headers don't play nice with the TinyCC headers,
+    there's also TinyCC-specific win32 headers package which contains
+    an "include" dir. Files in that dir are additional to the built-in
+    include files, except three which should overwrite the internal ones:
+
+        unistd.h
+        winapi/windows.h
+        winapi/winsock2.h
+
+    The latest package at the time of writing is winapi-full-for-0.9.27.zip
+    which works well also with TinyCC 0.9.28rc, and is available at:
+
+        http://download.savannah.nongnu.org/releases/tinycc/
+
 
     Resource Files:
     ---------------
