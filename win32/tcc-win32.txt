@@ -89,11 +89,16 @@
     If the latest mingw headers don't play nice with the TinyCC headers,
     there's also TinyCC-specific win32 headers package which contains
     an "include" dir. Files in that dir are additional to the built-in
-    include files, except three which should overwrite the internal ones:
+    include files. At the time ow writing there are three files in that
+    package which also exist as built-in:
 
         unistd.h
         winapi/windows.h
         winapi/winsock2.h
+
+    unistd.h and winapi/windows.h should overwrite the built-in headers,
+    while the built-in winapi/winsock2.h should be kept, as the one at
+    the external package is older and with less definitions.
 
     The latest package at the time of writing is winapi-full-for-0.9.27.zip
     which works well also with TinyCC 0.9.28rc, and is available at:
