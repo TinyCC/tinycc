@@ -2305,7 +2305,7 @@ static int layout_sections(TCCState *s1, int *sec_order, struct dyn_inf *d)
     }
     base = addr;
     /* compute address after headers */
-    addr = addr + (file_offset & (s_align - 1));
+    addr += file_offset;
 
     n = 0;
     for(i = 1; i < s1->nb_sections; i++) {
