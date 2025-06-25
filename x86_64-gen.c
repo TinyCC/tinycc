@@ -1800,7 +1800,6 @@ void gen_opi(int op)
         /* first operand must be in eax */
         /* XXX: need better constraint for second operand */
         gv2(RC_RAX, RC_RCX);
-        r = vtop[-1].r;
         fr = vtop[0].r;
         vtop--;
         save_reg(TREG_RDX);
@@ -1925,8 +1924,6 @@ void gen_opf(int op)
                     a++;
                 break;
             }
-            ft = vtop->type.t;
-            fc = vtop->c.i;
             o(0xde); /* fxxxp %st, %st(1) */
             o(0xc1 + (a << 3));
             vtop--;

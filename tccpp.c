@@ -1461,7 +1461,6 @@ static int expr_preprocess(TCCState *s1)
     pp_expr = 1;
     while (1) {
         next(); /* do macro subst */
-        t = tok;
         if (tok < TOK_IDENT) {
             if (tok == TOK_LINEFEED || tok == TOK_EOF)
                 break;

@@ -1349,7 +1349,6 @@ ST_FUNC void asm_compute_constraints(ASMOperand *operands,
 	if (op->reg >= 0) {
 	    if (is_reg_allocated(op->reg))
 	        tcc_error("asm regvar requests register that's taken already");
-	    reg = op->reg;
 	}
     try_next:
         c = *str++;
@@ -1536,10 +1535,11 @@ ST_FUNC void subst_asm_operand(CString *add_str,
                 goto no_offset;
 	    cstr_ccat(add_str, '+');
         }
-        val = sv->c.i;
+        val = (int)sv->c.i;
         if (modifier == 'n')
-            val = -val;
-        cstr_printf(add_str, "%d", (int)sv->c.i);
+            cstr_printf(add_str, "%d", -val);
+	else
+            cstr_printf(add_str, "%d", val);
     no_offset:;
 #ifdef TCC_TARGET_X86_64
         if (r & VT_LVAL)
