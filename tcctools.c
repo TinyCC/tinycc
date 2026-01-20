@@ -81,7 +81,7 @@ ST_FUNC int tcc_tool_ar(int argc, char **argv)
     int *afpos = NULL;
     int istrlen, strpos = 0, fpos = 0, funccnt = 0, funcmax, hofs;
     char tfile[260], stmp[20];
-    char *file, *name;
+    char *ar_file, *name;
     int ret = 2;
     const char *ops_conflict = "habdiopN";  // unsupported but destructive if ignored.
     int extract = 0;
@@ -272,9 +272,9 @@ finish:
             }
         }
 
-        file = argv[i_obj];
-        for (name = strchr(file, 0);
-             name > file && name[-1] != '/' && name[-1] != '\\';
+        ar_file = argv[i_obj];
+        for (name = strchr(ar_file, 0);
+             name > ar_file && name[-1] != '/' && name[-1] != '\\';
              --name);
         istrlen = strlen(name);
         if (istrlen >= sizeof(arhdro.ar_name))
