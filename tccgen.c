@@ -604,10 +604,12 @@ ST_FUNC void greloca(Section *s, Sym *sym, unsigned long offset, int type,
                 && (sym->type.t & (VT_STATIC|VT_EXTERN)) == (VT_STATIC|VT_EXTERN)) {
                 /* when a local function declaraion redeclares a global static one
                    then tccelf would not resolve them to the same symbol. */
-                Sym *s = sym;
-                while (s->prev_tok)
-                    s = s->prev_tok;
-                s->c = sym->c;
+
+                    Sym *sym_it = sym;
+                    while (sym_it->prev_tok)
+                        sym_it = sym_it->prev_tok;
+                    sym_it->c = sym->c;
+                
             }
         }
         c = sym->c;
