@@ -3024,7 +3024,7 @@ static int macro_subst(
     Sym **nested_list,
     const int *macro_str
     );
-
+    
 /* substitute arguments in replacement lists in macro_str by the values in
    args (field d) and return allocated string */
 static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
@@ -3059,17 +3059,18 @@ static int *macro_arg_subst(Sym **nested_list, const int *macro_str, Sym *args)
                 cstr_ccat(&tokcstr, '\"');
                 st = s->d;
                 while (*st != TOK_EOF) {
-                    const char *s;
+                    const char *tok_ptr;
                     TOK_GET(&t, &st, &cval);
-                    s = get_tok_str(t, &cval);
-                    while (*s) {
-                        if (t == TOK_PPSTR && *s != '\'')
-                            add_char(&tokcstr, *s);
+                    tok_ptr = get_tok_str(t, &cval);
+                    while (*tok_ptr) {
+                        if (t == TOK_PPSTR && *tok_ptr != '\'')
+                            add_char(&tokcstr, *tok_ptr);
                         else
-                            cstr_ccat(&tokcstr, *s);
-                        ++s;
+                            cstr_ccat(&tokcstr, *tok_ptr);
+                        ++tok_ptr;
                     }
                 }
+
                 cstr_ccat(&tokcstr, '\"');
                 cstr_ccat(&tokcstr, '\0');
                 //printf("\nstringize: <%s>\n", (char *)tokcstr.data);
