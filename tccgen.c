@@ -236,7 +236,7 @@ static int R_RET(int t)
 #ifdef TCC_TARGET_X86_64
     if ((t & VT_BTYPE) == VT_LDOUBLE)
         return TREG_ST0;
-#elif defined TCC_TARGET_RISCV64
+#elif defined TCC_TARGET_RISCV64 || defined TCC_TARGET_RISCV32
     if ((t & VT_BTYPE) == VT_LDOUBLE)
         return REG_IRET;
 #endif
@@ -250,12 +250,17 @@ static int R2_RET(int t)
 #if PTR_SIZE == 4
     if (t == VT_LLONG)
         return REG_IRE2;
+#ifdef TCC_TARGET_RISCV32
+    /* soft-float: double is 8 bytes, needs register pair on RV32 */
+    if (t == VT_DOUBLE)
+        return REG_IRE2;
+#endif
 #elif defined TCC_TARGET_X86_64
     if (t == VT_QLONG)
         return REG_IRE2;
     if (t == VT_QFLOAT)
         return REG_FRE2;
-#elif defined TCC_TARGET_RISCV64
+#elif defined TCC_TARGET_RISCV64 || defined TCC_TARGET_RISCV32
     if (t == VT_LDOUBLE)
         return REG_IRE2;
 #endif
@@ -287,7 +292,7 @@ static int RC_TYPE(int t)
         return RC_ST0;
     if ((t & VT_BTYPE) == VT_QFLOAT)
         return RC_FRET;
-#elif defined TCC_TARGET_RISCV64
+#elif defined TCC_TARGET_RISCV64 || defined TCC_TARGET_RISCV32
     if ((t & VT_BTYPE) == VT_LDOUBLE)
         return RC_INT;
 #endif
@@ -1907,7 +1912,7 @@ ST_FUNC int gv(int rc)
 
         bt = vtop->type.t & VT_BTYPE;
 
-#ifdef TCC_TARGET_RISCV64
+#if defined TCC_TARGET_RISCV64 || defined TCC_TARGET_RISCV32
         /* XXX mega hack */
         if (bt == VT_LDOUBLE && rc == RC_FLOAT)
           rc = RC_INT;
@@ -3171,7 +3176,7 @@ op_err:
         gv(is_float(vtop->type.t & VT_BTYPE) ? RC_FLOAT : RC_INT);
 }
 
-#if defined TCC_TARGET_ARM64 || defined TCC_TARGET_RISCV64 || defined TCC_TARGET_ARM
+#if defined TCC_TARGET_ARM64 || defined TCC_TARGET_RISCV64 || defined TCC_TARGET_RISCV32 || defined TCC_TARGET_ARM
 #define gen_cvt_itof1 gen_cvt_itof
 #else
 /* generic itof for unsigned long long case */
@@ -3198,7 +3203,7 @@ static void gen_cvt_itof1(int t)
 }
 #endif
 
-#if defined TCC_TARGET_ARM64 || defined TCC_TARGET_RISCV64
+#if defined TCC_TARGET_ARM64 || defined TCC_TARGET_RISCV64 || defined TCC_TARGET_RISCV32
 #define gen_cvt_ftoi1 gen_cvt_ftoi
 #else
 /* generic ftoi for unsigned long long case */
@@ -5863,7 +5868,7 @@ ST_FUNC void unary(void)
             mk_pointer(&type);
             vset(&type, VT_LOCAL, 0);       /* local frame */
             while (level--) {
-#ifdef TCC_TARGET_RISCV64
+#if defined TCC_TARGET_RISCV64 || defined TCC_TARGET_RISCV32
                 vpushi(2*PTR_SIZE);
                 gen_op('-');
 #endif
@@ -5875,7 +5880,7 @@ ST_FUNC void unary(void)
 #ifdef TCC_TARGET_ARM
                 vpushi(2*PTR_SIZE);
                 gen_op('+');
-#elif defined TCC_TARGET_RISCV64
+#elif defined TCC_TARGET_RISCV64 || defined TCC_TARGET_RISCV32
                 vpushi(PTR_SIZE);
                 gen_op('-');
 #else
@@ -5887,7 +5892,7 @@ ST_FUNC void unary(void)
             }
         }
         break;
-#ifdef TCC_TARGET_RISCV64
+#if defined TCC_TARGET_RISCV64 || defined TCC_TARGET_RISCV32
     case TOK_builtin_va_start:
         parse_builtin_params(0, "ee");
         r = vtop->r & VT_VALMASK;
@@ -6288,7 +6293,7 @@ special_math_val:
 
             if (ret_nregs < 0) {
                 vsetc(&ret.type, ret.r, &ret.c);
-#ifdef TCC_TARGET_RISCV64
+#if defined TCC_TARGET_RISCV64 || defined TCC_TARGET_RISCV32
                 arch_transfer_ret_regs(1);
 #endif
             } else {
@@ -6785,7 +6790,7 @@ static void gfunc_return(CType *func_type)
         ret_nregs = gfunc_sret(func_type, func_var, &ret_type,
                                &ret_align, &regsize);
         if (ret_nregs < 0) {
-#ifdef TCC_TARGET_RISCV64
+#if defined TCC_TARGET_RISCV64 || defined TCC_TARGET_RISCV32
             arch_transfer_ret_regs(0);
 #endif
         } else if (0 == ret_nregs) {

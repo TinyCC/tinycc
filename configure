@@ -348,6 +348,9 @@ case "$cpu" in
   riscv64)
     cpu="riscv64"
   ;;
+  riscv32)
+    cpu="riscv32"
+  ;;
   *)
     echo "Unsupported CPU"
     exit 1
@@ -636,7 +639,7 @@ cat >$TMPH <<EOF
 #define GCC_MINOR $gcc_minor
 
 #if !(TCC_TARGET_I386 || TCC_TARGET_X86_64 || TCC_TARGET_ARM\
- || TCC_TARGET_ARM64 || TCC_TARGET_RISCV64 || TCC_TARGET_C67)
+ || TCC_TARGET_ARM64 || TCC_TARGET_RISCV64 || TCC_TARGET_RISCV32 || TCC_TARGET_C67)
 EOF
 
 predefs=1
@@ -653,6 +656,7 @@ for v in $cpu $confvars ; do
     CONFIG_x86_64=yes)      print_num TCC_TARGET_X86_64 1 ;;
     CONFIG_arm64=yes)       print_num TCC_TARGET_ARM64 1 ;;
     CONFIG_riscv64=yes)     print_num TCC_TARGET_RISCV64 1 ;;
+    CONFIG_riscv32=yes)     print_num TCC_TARGET_RISCV32 1 ;;
     CONFIG_arm=yes)         print_num TCC_TARGET_ARM 1
                             print_num CONFIG_TCC_CPUVER "$cpuver" ;;
     CONFIG_arm_eabihf=yes)  print_num TCC_ARM_EABI 1

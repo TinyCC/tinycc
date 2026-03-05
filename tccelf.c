@@ -145,7 +145,7 @@ ST_FUNC void tccelf_delete(TCCState *s1)
     dynarray_reset(&s1->priv_sections, &s1->nb_priv_sections);
 
     tcc_free(s1->sym_attrs);
-#ifdef TCC_TARGET_RISCV64
+#if defined TCC_TARGET_RISCV64 || defined TCC_TARGET_RISCV32
     tcc_free(s1->pcrel_hi_entries);
 #endif
     symtab_section = NULL; /* for tccrun.c:rt_printline() */
@@ -1130,7 +1130,7 @@ static void relocate_section(TCCState *s1, Section *s, Section *sr)
     addr_t tgt, addr;
     int is_dwarf = s->sh_num >= s1->dwlo && s->sh_num < s1->dwhi;
 
-#ifdef TCC_TARGET_RISCV64
+#if defined TCC_TARGET_RISCV64 || defined TCC_TARGET_RISCV32
     s1->nb_pcrel_hi_entries = 0;
 #endif
 
@@ -1212,7 +1212,8 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
     int count = 0;
 #if defined(TCC_TARGET_I386) || defined(TCC_TARGET_X86_64) || \
     defined(TCC_TARGET_ARM) || defined(TCC_TARGET_ARM64) || \
-    defined(TCC_TARGET_RISCV64)
+    defined(TCC_TARGET_RISCV64) || \
+    defined(TCC_TARGET_RISCV32)
     ElfW_Rel *rel;
     for_each_elem(sr, 0, rel, ElfW_Rel) {
         int sym_index = ELFW(R_SYM)(rel->r_info);
@@ -1239,6 +1240,8 @@ static int prepare_dynamic_rel(TCCState *s1, Section *sr)
 #elif defined(TCC_TARGET_RISCV64)
         case R_RISCV_32:
         case R_RISCV_64:
+#elif defined(TCC_TARGET_RISCV32)
+        case R_RISCV_32:
 #endif
             count++;
             break;
@@ -1875,7 +1878,7 @@ static void tcc_add_linker_symbols(TCCState *s1)
 #if TARGETOS_OpenBSD
     set_global_sym(s1, "__executable_start", NULL, ELF_START_ADDR);
 #endif
-#ifdef TCC_TARGET_RISCV64
+#if defined TCC_TARGET_RISCV64 || defined TCC_TARGET_RISCV32
     /* XXX should be .sdata+0x800, not .data+0x800 */
     set_global_sym(s1, "__global_pointer$", data_section, 0x800);
 #endif
@@ -2632,6 +2635,8 @@ static int tcc_output_elf(TCCState *s1, FILE *f, int phnum, ElfW(Phdr) *phdr)
 #elif defined TCC_TARGET_RISCV64
     /* XXX should be configurable */
     ehdr.e_flags = EF_RISCV_FLOAT_ABI_DOUBLE;
+#elif defined TCC_TARGET_RISCV32
+    ehdr.e_flags = EF_RISCV_FLOAT_ABI_SOFT;
 #endif
 
     if (file_type == TCC_OUTPUT_OBJ) {
@@ -3345,7 +3350,7 @@ invalid:
             ptr = s->data + offset;
             full_read(fd, ptr, size);
         }
-#if defined TCC_TARGET_ARM || defined TCC_TARGET_ARM64 || defined TCC_TARGET_RISCV64
+#if defined TCC_TARGET_ARM || defined TCC_TARGET_ARM64 || defined TCC_TARGET_RISCV64 || defined TCC_TARGET_RISCV32
         /* align code sections to instruction lenght */
         /* This is needed if we compile a c file after this */
         if (s->sh_flags & SHF_EXECINSTR)
@@ -3452,7 +3457,7 @@ invalid:
                 if (!sym_index && !sm_table[sh->sh_info].link_once
 #ifdef TCC_TARGET_ARM
                     && type != R_ARM_V4BX
-#elif defined TCC_TARGET_RISCV64
+#elif defined TCC_TARGET_RISCV64 || defined TCC_TARGET_RISCV32
                     && type != R_RISCV_ALIGN
                     && type != R_RISCV_RELAX
 #endif

@@ -179,7 +179,7 @@
 #elif defined TCC_TARGET_ARM64
      DEF(TOK_builtin_va_start, "__builtin_va_start")
      DEF(TOK_builtin_va_arg, "__builtin_va_arg")
-#elif defined TCC_TARGET_RISCV64
+#elif defined TCC_TARGET_RISCV64 || defined TCC_TARGET_RISCV32
      DEF(TOK_builtin_va_start, "__builtin_va_start")
 #endif
 
@@ -206,7 +206,7 @@
      DEF(TOK_pack, "pack")
 #if !defined(TCC_TARGET_I386) && !defined(TCC_TARGET_X86_64) && \
     !defined(TCC_TARGET_ARM) && !defined(TCC_TARGET_ARM64) && \
-    !defined(TCC_TARGET_RISCV64)
+    !defined(TCC_TARGET_RISCV64) && !defined(TCC_TARGET_RISCV32)
      /* already defined for assembler */
      DEF(TOK_ASM_push, "push")
      DEF(TOK_ASM_pop, "pop")
@@ -306,8 +306,53 @@
 #if defined TCC_TARGET_PE
      DEF(TOK___chkstk, "__chkstk")
 #endif
-#if defined TCC_TARGET_ARM64 || defined TCC_TARGET_RISCV64
+#if defined TCC_TARGET_ARM64 || defined TCC_TARGET_RISCV64 || defined TCC_TARGET_RISCV32
      DEF(TOK___arm64_clear_cache, "__arm64_clear_cache")
+#endif
+#if defined TCC_TARGET_RISCV32
+     /* soft-float single-precision libcalls */
+     DEF(TOK___addsf3, "__addsf3")
+     DEF(TOK___subsf3, "__subsf3")
+     DEF(TOK___mulsf3, "__mulsf3")
+     DEF(TOK___divsf3, "__divsf3")
+     DEF(TOK___eqsf2, "__eqsf2")
+     DEF(TOK___nesf2, "__nesf2")
+     DEF(TOK___ltsf2, "__ltsf2")
+     DEF(TOK___lesf2, "__lesf2")
+     DEF(TOK___gtsf2, "__gtsf2")
+     DEF(TOK___gesf2, "__gesf2")
+     /* soft-float double-precision libcalls */
+     DEF(TOK___adddf3, "__adddf3")
+     DEF(TOK___subdf3, "__subdf3")
+     DEF(TOK___muldf3, "__muldf3")
+     DEF(TOK___divdf3, "__divdf3")
+     DEF(TOK___eqdf2, "__eqdf2")
+     DEF(TOK___nedf2, "__nedf2")
+     DEF(TOK___ltdf2, "__ltdf2")
+     DEF(TOK___ledf2, "__ledf2")
+     DEF(TOK___gtdf2, "__gtdf2")
+     DEF(TOK___gedf2, "__gedf2")
+     /* soft-float conversion libcalls */
+     DEF(TOK___extendsfdf2, "__extendsfdf2")
+     DEF(TOK___truncdfsf2, "__truncdfsf2")
+     DEF(TOK___fixsfsi, "__fixsfsi")
+     DEF(TOK___fixdfsi, "__fixdfsi")
+     DEF(TOK___fixunssfsi, "__fixunssfsi")
+     DEF(TOK___fixunsdfsi, "__fixunsdfsi")
+     DEF(TOK___fixsfdi, "__fixsfdi")
+     DEF(TOK___fixdfdi, "__fixdfdi")
+     /* TOK___fixunssfdi, TOK___fixunsdfdi already in #ifndef TCC_ARM_EABI block */
+     DEF(TOK___floatsisf, "__floatsisf")
+     DEF(TOK___floatsidf, "__floatsidf")
+     DEF(TOK___floatunsisf, "__floatunsisf")
+     DEF(TOK___floatunsidf, "__floatunsidf")
+     DEF(TOK___floatdisf, "__floatdisf")
+     DEF(TOK___floatdidf, "__floatdidf")
+     /* TOK___floatundisf, TOK___floatundidf already in #ifndef TCC_ARM_EABI block */
+     DEF(TOK___negsf2, "__negsf2")
+     DEF(TOK___negdf2, "__negdf2")
+#endif
+#if defined TCC_TARGET_ARM64 || defined TCC_TARGET_RISCV64 || defined TCC_TARGET_RISCV32
      DEF(TOK___addtf3, "__addtf3")
      DEF(TOK___subtf3, "__subtf3")
      DEF(TOK___multf3, "__multf3")
@@ -407,7 +452,7 @@
  DEF_ASMDIR(code32)
 #elif defined(TCC_TARGET_X86_64)
  DEF_ASMDIR(code64)
-#elif defined(TCC_TARGET_RISCV64)
+#elif defined(TCC_TARGET_RISCV64) || defined(TCC_TARGET_RISCV32)
  DEF_ASMDIR(option)
 #endif
  DEF_ASMDIR(short)
@@ -427,4 +472,8 @@
 
 #if defined TCC_TARGET_RISCV64
 #include "riscv64-tok.h"
+#endif
+
+#if defined TCC_TARGET_RISCV32
+#include "riscv32-tok.h"
 #endif
