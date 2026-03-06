@@ -691,7 +691,8 @@ for v in $cpu $confvars ; do
       esac
       ;;
     # other
-    CONFIG_libgcc=yes)      print_num CONFIG_USE_LIBGCC 1 ;;
+    CONFIG_libgcc=yes)      print_num CONFIG_USE_LIBGCC 1
+                            print_str TCC_LIBGCC "libgcc_s.so.1" ;;
     CONFIG_selinux=yes)     print_num CONFIG_SELINUX 1 ;;
     CONFIG_pie=yes)         print_num CONFIG_TCC_PIE 1 ;;
     CONFIG_pic=yes)         print_num CONFIG_TCC_PIC 1 ;;
