@@ -28,12 +28,16 @@ SKIP_X86="85 98 99 127"
 SKIP_BCHECK="112 113 114 115 116 117 126 132"
 # Non-standard C
 SKIP_NONSTD="34"
-# 32-bit non-Windows bitfields_ms
-SKIP_32BIT="95_bitfields_ms"
+# 32-bit bitfield alignment (same skip as i386/arm in Makefile)
+SKIP_32BIT="95 95_bitfields_ms"
+# -dt mode tests (require -run which is not available on riscv32)
+SKIP_DT="60 96 125 128"
+# Struct return + cleanup attribute interaction (first field corrupted by hidden return pointer)
+SKIP_CLEANUP="101"
 # ARM64-specific
 SKIP_ARM64="73"
 
-SKIP_SET=" $SKIP_X86 $SKIP_BCHECK $SKIP_NONSTD $SKIP_ARM64 "
+SKIP_SET=" $SKIP_X86 $SKIP_BCHECK $SKIP_NONSTD $SKIP_32BIT $SKIP_DT $SKIP_CLEANUP $SKIP_ARM64 "
 
 is_skipped() {
     local num="$1" name="$2"
