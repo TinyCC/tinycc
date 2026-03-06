@@ -2290,6 +2290,66 @@ static void gen_opl(int op)
                This is not needed when comparing switch cases */
             save_regs(4);
         }
+#if defined(TCC_TARGET_RISCV32)
+        /* RISC-V has no flags register, so the "re-test NE on same
+           comparison" trick used for flag-based architectures doesn't
+           work.  Force both high words into registers so the comparison
+           is always register-register (not slti), then save the hardware
+           register numbers for the NE re-test.  Branch instructions
+           only read registers, so they're still live after gvtst. */
+        {
+            unsigned short saved_cmp_r;
+
+            /* compare high */
+            op1 = op;
+            if (op1 == TOK_LT)
+                op1 = TOK_LE;
+            else if (op1 == TOK_GT)
+                op1 = TOK_GE;
+            else if (op1 == TOK_ULT)
+                op1 = TOK_ULE;
+            else if (op1 == TOK_UGT)
+                op1 = TOK_UGE;
+            a = 0;
+            b = 0;
+            /* Force both operands into registers so gen_op uses
+               register-register comparison (not slti with immediate).
+               This ensures cmp_r encodes a real register pair that
+               can be reused for the NE test below. */
+            gv2(RC_INT, RC_INT);
+            gen_op(op1);
+            /* Save the register pair from the comparison.  Since we
+               forced both operands into registers above, cmp_r always
+               encodes two real registers (not a reg-vs-zero from slti). */
+            saved_cmp_r = vtop->cmp_r;
+            if (op == TOK_NE) {
+                b = gvtst(0, 0);
+            } else {
+                a = gvtst(1, 0);
+                if (op != TOK_EQ) {
+                    /* generate non equal test using saved register pair */
+                    vpushi(0);
+                    vset_VT_CMP(TOK_NE);
+                    vtop->cmp_r = saved_cmp_r;
+                    b = gvtst(0, 0);
+                }
+            }
+            /* compare low. Always unsigned */
+            op1 = op;
+            if (op1 == TOK_LT)
+                op1 = TOK_ULT;
+            else if (op1 == TOK_LE)
+                op1 = TOK_ULE;
+            else if (op1 == TOK_GT)
+                op1 = TOK_UGT;
+            else if (op1 == TOK_GE)
+                op1 = TOK_UGE;
+            gen_op(op1);
+            gvtst_set(1, a);
+            gvtst_set(0, b);
+        }
+        break;
+#else
         /* compare high */
         op1 = op;
         /* when values are equal, we need to compare low words. since
@@ -2334,6 +2394,7 @@ static void gen_opl(int op)
         gvtst_set(1, a);
         gvtst_set(0, b);
         break;
+#endif
     }
 }
 #endif
@@ -3169,6 +3230,14 @@ op_err:
             vtop->type.t = VT_INT;
         } else {
             vtop->type.t = t;
+#ifdef TCC_USING_DOUBLE_FOR_LDOUBLE
+            /* Preserve VT_LONG if either operand was originally
+               long double (VT_DOUBLE|VT_LONG), so varargs passing
+               can detect it later for ABI conversion */
+            if ((t & VT_BTYPE) == VT_DOUBLE
+                && ((t1 | t2) & VT_LONG))
+                vtop->type.t |= VT_LONG;
+#endif
         }
     }
     // Make sure that we have converted to an rvalue:

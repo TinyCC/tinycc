@@ -1,17 +1,19 @@
 #ifdef TARGET_DEFS_ONLY
 
 // Number of registers available to allocator:
-// x10-x17 aka a0-a7, xxx, ra, sp
+// x10-x17 aka a0-a7, x28-x31 aka t3-t6, xxx, ra, sp
 // No float registers (soft-float RV32IMA)
-#define NB_REGS 11
+#define NB_REGS 15
 #define CONFIG_TCC_ASM
 
-#define TREG_R(x) (x) // x = 0..7
+#define TREG_R(x) (x) // x = 0..7 (a0-a7)
+#define TREG_T(x) (8 + (x)) // x = 0..3 (t3-t6)
 
 // Register classes sorted from more general to more precise:
 #define RC_INT (1 << 0)
 #define RC_FLOAT (1 << 1) // defined but no regs in this class (soft-float)
 #define RC_R(x) (1 << (2 + (x))) // x = 0..7
+#define RC_T(x) (1 << (10 + (x))) // x = 0..3
 
 #define RC_IRET (RC_R(0)) // int return register class
 #define RC_IRE2 (RC_R(1)) // int 2nd return register class
@@ -50,18 +52,22 @@ ST_DATA const char * const target_machine_defs =
 
 #define XLEN 4
 
-#define TREG_RA 9
-#define TREG_SP 10
+#define TREG_RA 13
+#define TREG_SP 14
 
 ST_DATA const int reg_classes[NB_REGS] = {
-  RC_INT | RC_FLOAT | RC_R(0),  /* soft-float: floats use int regs */
-  RC_INT | RC_FLOAT | RC_R(1),
-  RC_INT | RC_FLOAT | RC_R(2),
-  RC_INT | RC_FLOAT | RC_R(3),
-  RC_INT | RC_FLOAT | RC_R(4),
-  RC_INT | RC_FLOAT | RC_R(5),
-  RC_INT | RC_FLOAT | RC_R(6),
-  RC_INT | RC_FLOAT | RC_R(7),
+  RC_INT | RC_FLOAT | RC_R(0),  /* a0 — soft-float: floats use int regs */
+  RC_INT | RC_FLOAT | RC_R(1),  /* a1 */
+  RC_INT | RC_FLOAT | RC_R(2),  /* a2 */
+  RC_INT | RC_FLOAT | RC_R(3),  /* a3 */
+  RC_INT | RC_FLOAT | RC_R(4),  /* a4 */
+  RC_INT | RC_FLOAT | RC_R(5),  /* a5 */
+  RC_INT | RC_FLOAT | RC_R(6),  /* a6 */
+  RC_INT | RC_FLOAT | RC_R(7),  /* a7 */
+  RC_INT | RC_FLOAT | RC_T(0),  /* t3 (x28) — caller-saved temporaries */
+  RC_INT | RC_FLOAT | RC_T(1),  /* t4 (x29) */
+  RC_INT | RC_FLOAT | RC_T(2),  /* t5 (x30) */
+  RC_INT | RC_FLOAT | RC_T(3),  /* t6 (x31) */
   0,
   1 << TREG_RA,
   1 << TREG_SP
@@ -79,13 +85,15 @@ static int ireg(int r)
       return 1; // ra
     if (r == TREG_SP)
       return 2; // sp
+    if (r >= 8 && r < 12)
+      return r + 20;  // tccT0-T3 --> t3-t6 == x28-x31
     assert(r >= 0 && r < 8);
     return r + 10;  // tccrX --> aX == x(10+X)
 }
 
 static int is_ireg(int r)
 {
-    return (unsigned)r < 8 || r == TREG_RA || r == TREG_SP;
+    return (unsigned)r < 12 || r == TREG_RA || r == TREG_SP;
 }
 
 ST_FUNC void o(unsigned int c)
@@ -168,7 +176,7 @@ static int load_symofs(int r, SValue *sv, int forstore, int *new_fc)
         label.type.t = VT_VOID | VT_STATIC;
 	if (!nocode_wanted)
             put_extern_sym(&label, cur_text_section, ind, 0);
-        rr = ireg(r);
+        rr = is_ireg(r) ? ireg(r) : 5; // t0 when called from store (r=-1)
         o(0x17 | (rr << 7));   // auipc RR, 0 %pcrel_hi(sym)+addend
         greloca(cur_text_section, &label, ind,
                 doload || !forstore
@@ -186,7 +194,7 @@ static int load_symofs(int r, SValue *sv, int forstore, int *new_fc)
         if (fc != sv->c.i)
           tcc_error("unimp: store(giant local off) (0x%lx)", (long)sv->c.i);
         if (LOW_OVERFLOW(fc)) {
-            rr = ireg(r); // use dest reg as temp
+            rr = is_ireg(r) ? ireg(r) : 5; // t0 when called from store (r=-1)
             o(0x37 | (rr << 7) | UPPER(fc)); //lui RR, upper(fc)
             ER(0x33, 0, rr, rr, 8, 0); // add RR, RR, s0
             *new_fc = SIGN11(fc);
@@ -448,11 +456,7 @@ static void reg_pass_rec(CType *type, int *rc, int *fieldofs, int ofs)
             reg_pass_rec(&type->ref->type, rc, fieldofs, ofs);
             if (rc[0] > 2 || (rc[0] == 2 && type->ref->c > 1))
               rc[0] = -1;
-            else if (type->ref->c == 2 && rc[0] && rc[1] == RC_INT) {
-              rc[++rc[0]] = RC_INT;
-              fieldofs[rc[0]] = ((ofs + sz) << 4)
-                                | (type->ref->type.t & VT_BTYPE);
-            } else if (type->ref->c == 2)
+            else if (type->ref->c == 2)
               rc[0] = -1;
         }
     } else if (rc[0] == 2 || rc[0] < 0
@@ -462,8 +466,10 @@ static void reg_pass_rec(CType *type, int *rc, int *fieldofs, int ofs)
       /* On RV32 soft-float, double/llong/ldouble are wider than XLEN
          and need register pairs; handled by reg_pass fallback */
       rc[0] = -1;
-    else if (!rc[0] || rc[1] == RC_INT) {
-      /* soft-float: all types go in integer registers */
+    else if (!rc[0]) {
+      /* soft-float: first scalar field goes in integer register.
+         Additional fields force fallback (size-based packing) since
+         on RV32 soft-float there are no mixed int+float pairs. */
       rc[++rc[0]] = RC_INT;
       fieldofs[rc[0]] = (ofs << 4) | ((type->t & VT_BTYPE) == VT_PTR ? VT_INT : type->t & VT_BTYPE);
     } else
@@ -482,6 +488,8 @@ static void reg_pass(CType *type, int *prc, int *fieldofs, int named)
         fieldofs[2] = (4 << 4) | (size <= 5 ? VT_BYTE : size <= 6 ? VT_SHORT : VT_INT);
     }
 }
+
+static void gen_dbl_to_quad_store(int d0, int d1, int addr);
 
 ST_FUNC void gfunc_call(int nb_args)
 {
@@ -507,6 +515,15 @@ ST_FUNC void gfunc_call(int nb_args)
         sv = &vtop[1 + i - nb_args];
         sv->type.t &= ~VT_ARRAY; // XXX this should be done in tccgen.c
         size = type_size(&sv->type, &align);
+        /* Varargs long double: the RV32 ILP32 ABI uses 128-bit (binary128)
+           long double passed by reference.  TCC internally uses 64-bit
+           double, so force the size to 16 to trigger the byref path.
+           The byref store phase converts the value to quad format. */
+        if (!sa && (sv->type.t & VT_BTYPE) == VT_DOUBLE
+                && (sv->type.t & VT_LONG)) {
+            size = 16;
+            align = 16;
+        }
         if (size > 2 * XLEN) {
             if (align < XLEN)
               align = XLEN;
@@ -520,6 +537,8 @@ ST_FUNC void gfunc_call(int nb_args)
         if (!old && !sa && align == 2*XLEN && size <= 2*XLEN)
           areg[0] = (areg[0] + 1) & ~1;
         nregs = prc[0];
+        if (byref)
+          nregs = 1;  /* byref passes a pointer, needs only 1 register */
         if (size == 0)
             info[i] = 0;
         else if (prc[1] == RC_INT && areg[0] >= 8) {
@@ -568,16 +587,40 @@ ST_FUNC void gfunc_call(int nb_args)
                 vrotb(nb_args - i);
                 size = type_size(&vtop->type, &align);
                 if (info[i] & 64) {
-                    vset(&char_pointer_type, TREG_SP, 0);
-                    vpushi(stack_adj + (info[i] >> 7));
-                    gen_op('+');
-                    vpushv(vtop); // this replaces the old argument
-                    vrott(3);
-                    indir();
-                    vtop->type = vtop[-1].type;
-                    vswap();
-                    vstore();
-                    vpop();
+                    if ((vtop->type.t & VT_BTYPE) == VT_DOUBLE
+                        && (vtop->type.t & VT_LONG)) {
+                        /* Varargs long double: convert 64-bit double to
+                           128-bit quad in temp space, replace with pointer */
+                        int dest_ofs = stack_adj + (info[i] >> 7);
+                        /* Compute dest addr: sp + dest_ofs → t0 (x5) */
+                        if (dest_ofs >= 0 && dest_ofs < 2048)
+                            EI(0x13, 0, 5, 2, dest_ofs);
+                        else {
+                            o(0x37 | (5 << 7) | UPPER(dest_ofs));
+                            EI(0x13, 0, 5, 5, SIGN11(dest_ofs));
+                            ER(0x33, 0, 5, 5, 2, 0);
+                        }
+                        /* Force double into register pair */
+                        gv(RC_INT);
+                        gen_dbl_to_quad_store(ireg(vtop->r),
+                                              ireg(vtop->r2), 5);
+                        vtop--;  /* pop the double */
+                        /* Push pointer to the quad as the new argument */
+                        vset(&char_pointer_type, TREG_SP, 0);
+                        vpushi(dest_ofs);
+                        gen_op('+');
+                    } else {
+                        vset(&char_pointer_type, TREG_SP, 0);
+                        vpushi(stack_adj + (info[i] >> 7));
+                        gen_op('+');
+                        vpushv(vtop); // this replaces the old argument
+                        vrott(3);
+                        indir();
+                        vtop->type = vtop[-1].type;
+                        vswap();
+                        vstore();
+                        vpop();
+                    }
                     size = align = XLEN;
                 }
                 if (info[i] & 32) {
@@ -624,8 +667,9 @@ ST_FUNC void gfunc_call(int nb_args)
                 r2 = 1 + TREG_RA;
             }
             if (loadt == VT_LDOUBLE
-                || (r2 && (loadt == VT_DOUBLE))) {
-                /* Double/ldouble: two-word value handled via offset below */
+                || (r2 && (loadt == VT_DOUBLE))
+                || (r2 && (loadt == VT_LLONG))) {
+                /* Two-word value: gv() handles loading both halves */
                 assert(r2);
                 r2--;
             } else if (r2) {
@@ -636,7 +680,7 @@ ST_FUNC void gfunc_call(int nb_args)
             gv(RC_R(r));
             vtop->type = origtype;
 
-            if (r2 && loadt != VT_LDOUBLE && loadt != VT_DOUBLE) {
+            if (r2 && loadt != VT_LDOUBLE && loadt != VT_DOUBLE && loadt != VT_LLONG) {
                 r2--;
                 assert(r2 < 16 || r2 == TREG_RA);
                 vswap();
@@ -667,7 +711,7 @@ ST_FUNC void gfunc_call(int nb_args)
             if (info[nb_args - 1 - i] & 16) {
                 ES(0x23, 2, 2, ireg(vtop->r2), splitofs); // sw t0, ofs(sp)
                 vtop->r2 = VT_CONST;
-            } else if ((loadt == VT_LDOUBLE || loadt == VT_DOUBLE) && vtop->r2 != r2) {
+            } else if ((loadt == VT_LDOUBLE || loadt == VT_DOUBLE || loadt == VT_LLONG) && vtop->r2 != r2) {
                 assert(vtop->r2 <= 7 && r2 <= 7);
                 EI(0x13, 0, ireg(r2), ireg(vtop->r2), 0); // mv Ra+1, RR2
                 vtop->r2 = r2;
@@ -925,6 +969,89 @@ ST_FUNC int gjmp_append(int n, int t)
    generation occurs (only vstack manipulation), so t0 is safe. */
 #define CARRY_REG 5 /* x5 = t0 */
 
+/* Emit code to convert a 64-bit double (binary64) in hardware registers
+   d0 (low word) and d1 (high word) to IEEE 754 binary128 (quad) format,
+   and store 16 bytes to the address in hardware register 'addr'.
+   Uses t1 (x6) and t2 (x7) as scratch.  addr must be t0 (x5).
+   d0 and d1 must be from TCC's allocatable set (a0-a7, t3-t6).
+
+   Double: sign(1) | exp(11) | mantissa(52)
+   Quad:   sign(1) | exp(15) | mantissa(112)
+   Mantissa shifted left by 60 bits; exponent bias adjusted by 15360.
+
+   In little-endian 32-bit words:
+   Q0 = 0
+   Q1 = mantissa[3:0] << 28
+   Q2 = (D0 >> 4) | ((D1 & 0xF) << 28)
+   Q3 = sign | (quad_exp << 16) | mantissa[51:36] */
+static void gen_dbl_to_quad_store(int d0, int d1, int addr)
+{
+    int s1 = 6, s2 = 7; /* t1 (x6), t2 (x7) — unmanaged scratch */
+
+    /* Q0 = 0 */
+    ES(0x23, 2, addr, 0, 0);          /* sw x0, 0(addr) */
+
+    /* Q1 = (D0 & 0xF) << 28 */
+    EI(0x13, 7, s1, d0, 0xF);         /* andi t1, d0, 0xF */
+    EI(0x13, 1, s1, s1, 28);          /* slli t1, t1, 28 */
+    ES(0x23, 2, addr, s1, 4);         /* sw t1, 4(addr) */
+
+    /* Q2 = (D0 >> 4) | ((D1 & 0xF) << 28) */
+    EI(0x13, 5, s1, d0, 4);           /* srli t1, d0, 4 */
+    EI(0x13, 7, s2, d1, 0xF);         /* andi t2, d1, 0xF */
+    EI(0x13, 1, s2, s2, 28);          /* slli t2, t2, 28 */
+    ER(0x33, 6, s1, s1, s2, 0);       /* or t1, t1, t2 */
+    ES(0x23, 2, addr, s1, 8);         /* sw t1, 8(addr) */
+
+    /* Q3: build quad exponent, then combine with mantissa and sign */
+
+    /* Extract double exponent into s1 */
+    EI(0x13, 5, s1, d1, 20);          /* srli t1, d1, 20 */
+    EI(0x13, 7, s1, s1, 0x7FF);       /* andi t1, t1, 0x7FF */
+
+    /* if double_exp == 0 → quad_exp = 0 (zero/denorm), skip bias.
+       8 instructions ahead = 32 bytes to .Lafter_bias */
+    o(0x63 | (0 << 12) | (s1 << 15) | (0 << 20)
+         | (0 << 7) | (0 << 8) | (1 << 25) | (0 << 31));
+                                       /* beq t1, x0, +32 */
+
+    /* if double_exp == 0x7FF → inf/NaN, set quad_exp = 0x7FFF.
+       5 instructions ahead = 20 bytes to .Linf_nan */
+    EI(0x13, 0, s2, 0, 0x7FF);        /* li t2, 0x7FF */
+    o(0x63 | (0 << 12) | (s1 << 15) | (s2 << 20)
+         | (0 << 7) | (0xA << 8) | (0 << 25) | (0 << 31));
+                                       /* beq t1, t2, +20 */
+
+    /* Normal: quad_exp = double_exp + 15360 (0x3C00) */
+    o(0x37 | (s2 << 7) | (4 << 12));  /* lui t2, 4 (= 0x4000) */
+    EI(0x13, 0, s2, s2, -1024);       /* addi t2, t2, -1024 (= 0x3C00) */
+    ER(0x33, 0, s1, s1, s2, 0);       /* add t1, t1, t2 */
+    o(0x6F | (0 << 7) | (0 << 12) | (0 << 20)
+         | (6 << 21) | (0 << 31));    /* jal x0, +12 (skip inf/nan) */
+
+    /* .Linf_nan: quad_exp = 0x7FFF */
+    o(0x37 | (s1 << 7) | (8 << 12));  /* lui t1, 8 (= 0x8000) */
+    EI(0x13, 0, s1, s1, -1);          /* addi t1, t1, -1 (= 0x7FFF) */
+
+    /* .Lafter_bias: s1 = quad_exp */
+
+    /* Shift exponent into position */
+    EI(0x13, 1, s1, s1, 16);          /* slli t1, t1, 16 */
+
+    /* mantissa[51:36] = (D1 >> 4) & 0xFFFF — use slli+srli to mask */
+    EI(0x13, 5, s2, d1, 4);           /* srli t2, d1, 4 */
+    EI(0x13, 1, s2, s2, 16);          /* slli t2, t2, 16 */
+    EI(0x13, 5, s2, s2, 16);          /* srli t2, t2, 16 */
+    ER(0x33, 6, s1, s1, s2, 0);       /* or t1, t1, t2 */
+
+    /* sign = D1[31] */
+    EI(0x13, 5, s2, d1, 31);          /* srli t2, d1, 31 */
+    EI(0x13, 1, s2, s2, 31);          /* slli t2, t2, 31 */
+    ER(0x33, 6, s1, s1, s2, 0);       /* or t1, t1, t2 */
+
+    ES(0x23, 2, addr, s1, 12);        /* sw t1, 12(addr) */
+}
+
 static void gen_opil(int op)
 {
     int a, b, d;
@@ -1079,13 +1206,24 @@ ST_FUNC void gen_opi(int op)
         gv2(RC_INT, RC_INT);
         a = ireg(vtop[-1].r);
         b = ireg(vtop[0].r);
+        /* Save both source regs to temporaries first, so register
+           allocation for dl/dh can't clobber them. */
         vtop--;
         dl = get_reg(RC_INT);
-        vtop->r = dl;  /* mark dl in-use so get_reg returns a different reg */
+        vtop->r = dl;
         dh = get_reg(RC_INT);
-        /* Compute high first (reads a,b), then low (may clobber if dl==a or dl==b) */
-        ER(0x33, 3, ireg(dh), a, b, 1); // mulhu dh, a, b
-        ER(0x33, 0, ireg(dl), a, b, 1); // mul dl, a, b
+        /* mul reads both sources before writing dest, so
+           dl overlapping a source is fine.  But mulhu writes dh
+           before mul reads, so ensure dh != a and dh != b. */
+        if (ireg(dh) == a || ireg(dh) == b) {
+            /* Use t0 (x5) as scratch for mulhu, then move to dh */
+            ER(0x33, 3, 5, a, b, 1);       // mulhu t0, a, b
+            ER(0x33, 0, ireg(dl), a, b, 1); // mul dl, a, b
+            EI(0x13, 0, ireg(dh), 5, 0);   // mv dh, t0
+        } else {
+            ER(0x33, 3, ireg(dh), a, b, 1); // mulhu dh, a, b
+            ER(0x33, 0, ireg(dl), a, b, 1); // mul dl, a, b
+        }
         vtop->r = dl;
         vtop->r2 = dh;
         return;
@@ -1099,11 +1237,14 @@ ST_FUNC void gen_opi(int op)
 
 ST_FUNC void gen_opf(int op)
 {
-    /* RV32IMA: no FPU, all float ops through library calls */
+    /* RV32IMA: no FPU, all float ops through library calls.
+       Use save_regs+gcall_or_jmp instead of gfunc_call to avoid
+       nested function call issues when used inside argument evaluation. */
     int func = 0;
     int cond = -1;
     int ft = vtop[0].type.t & VT_BTYPE;
     CType type = vtop[0].type;
+    int dbl = (ft == VT_DOUBLE || ft == VT_LDOUBLE);
 
     if (ft == VT_FLOAT) {
         switch (op) {
@@ -1119,7 +1260,7 @@ ST_FUNC void gen_opf(int op)
         case TOK_GT: func = TOK___gtsf2; cond = 13; break;
         default: assert(0); break;
         }
-    } else if (ft == VT_DOUBLE || ft == VT_LDOUBLE) {
+    } else if (dbl) {
         switch (op) {
         case '*': func = TOK___muldf3; break;
         case '+': func = TOK___adddf3; break;
@@ -1137,15 +1278,35 @@ ST_FUNC void gen_opf(int op)
         assert(0);
     }
 
+    save_regs(1);
+    if (dbl) {
+        /* double: arg2 in a2:a3, arg1 in a0:a1 */
+        gv(RC_R(2));
+        if (vtop->r2 != TREG_R(3)) {
+            EI(0x13, 0, 13, ireg(vtop->r2), 0); // mv a3, r2
+            vtop->r2 = TREG_R(3);
+        }
+        vswap();
+        gv(RC_R(0));
+        if (vtop->r2 != TREG_R(1)) {
+            EI(0x13, 0, 11, ireg(vtop->r2), 0); // mv a1, r2
+            vtop->r2 = TREG_R(1);
+        }
+    } else {
+        /* float: arg2 in a1, arg1 in a0 */
+        gv(RC_R(1));
+        vswap();
+        gv(RC_R(0));
+    }
     vpush_helper_func(func);
-    vrott(3);
-    gfunc_call(2);
+    gcall_or_jmp(1);
+    vtop -= 3; /* pop helper, arg1, arg2 */
     vpushi(0);
     vtop->r = REG_IRET;
     vtop->r2 = VT_CONST;
     if (cond < 0) {
         vtop->type = type;
-        if (ft == VT_DOUBLE || ft == VT_LDOUBLE)
+        if (dbl)
             vtop->r2 = TREG_R(1);
     } else {
         vpushi(0);
@@ -1156,8 +1317,8 @@ ST_FUNC void gen_opf(int op)
 ST_FUNC void gen_cvt_itof(int t)
 {
     int u, l, func;
-    /* soft-float: use library calls */
-    gv(RC_INT);
+    /* soft-float: use library calls.
+       Use save_regs+gcall_or_jmp to avoid nested gfunc_call issues. */
     u = vtop->type.t & VT_UNSIGNED;
     l = (vtop->type.t & VT_BTYPE) == VT_LLONG;
 
@@ -1173,9 +1334,15 @@ ST_FUNC void gen_cvt_itof(int t)
         else
             func = u ? TOK___floatunsidf : TOK___floatsidf;
     }
+    save_regs(1);
+    gv(RC_R(0));
+    if (l && vtop->r2 != TREG_R(1)) {
+        EI(0x13, 0, 11, ireg(vtop->r2), 0); // mv a1, r2
+        vtop->r2 = TREG_R(1);
+    }
     vpush_helper_func(func);
-    vrott(2);
-    gfunc_call(1);
+    gcall_or_jmp(1);
+    vtop -= 2;
     vpushi(0);
     vtop->type.t = t;
     vtop->r = REG_IRET;
@@ -1185,7 +1352,8 @@ ST_FUNC void gen_cvt_itof(int t)
 
 ST_FUNC void gen_cvt_ftoi(int t)
 {
-    /* soft-float: use library calls */
+    /* soft-float: use library calls.
+       Use save_regs+gcall_or_jmp to avoid nested gfunc_call issues. */
     int ft = vtop->type.t & VT_BTYPE;
     int l = (t & VT_BTYPE) == VT_LLONG;
     int u = t & VT_UNSIGNED;
@@ -1203,9 +1371,15 @@ ST_FUNC void gen_cvt_ftoi(int t)
         else
             func = u ? TOK___fixunsdfsi : TOK___fixdfsi;
     }
+    save_regs(1);
+    gv(RC_R(0));
+    if ((ft == VT_DOUBLE || ft == VT_LDOUBLE) && vtop->r2 != TREG_R(1)) {
+        EI(0x13, 0, 11, ireg(vtop->r2), 0); // mv a1, r2
+        vtop->r2 = TREG_R(1);
+    }
     vpush_helper_func(func);
-    vrott(2);
-    gfunc_call(1);
+    gcall_or_jmp(1);
+    vtop -= 2;
     vpushi(0);
     vtop->type.t = t;
     vtop->r = REG_IRET;
