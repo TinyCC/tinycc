@@ -1736,6 +1736,9 @@ static const FlagDef options_m[] = {
 #ifdef TCC_TARGET_X86_64
     { offsetof(TCCState, nosse), FD_INVERT, "sse" },
 #endif
+#ifdef TCC_TARGET_RISCV32
+    { offsetof(TCCState, fpu), 0, "fpu" },
+#endif
     { 0, 0, NULL }
 };
 

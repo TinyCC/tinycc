@@ -824,6 +824,9 @@ struct TCCState {
 #ifdef TCC_TARGET_ARM
     unsigned char float_abi; /* float ABI of the generated code*/
 #endif
+#ifdef TCC_TARGET_RISCV32
+    unsigned char fpu; /* if true, emit inline F/D instructions (-mfpu) */
+#endif
 
     unsigned char has_text_addr;
     addr_t text_addr; /* address of text section */

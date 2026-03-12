@@ -1235,8 +1235,141 @@ ST_FUNC void gen_opi(int op)
    decomposes long long ops into TOK_ADDC1/ADDC2/SUBC1/SUBC2/UMULL
    handled by gen_opi above. */
 
+/* FPU register numbers (hardware encoding) */
+#define FA0 10
+#define FA1 11
+
+/* Emit: fmv.w.x fd, rs — move int reg to float reg */
+static void fmv_w_x(int fd, int rs)
+{
+    ER(0x53, 0, fd, rs, 0, 0x78); // fmv.w.x fd, rs
+}
+
+/* Emit: fmv.x.w rd, fs — move float reg to int reg */
+static void fmv_x_w(int rd, int fs)
+{
+    ER(0x53, 0, rd, fs, 0, 0x70); // fmv.x.w rd, fs
+}
+
+/* gen_opf_fpu: inline FPU for float/double arithmetic and comparisons.
+   Values stay in integer registers (soft-float ABI); we transfer to
+   fa0/fa1, operate, and transfer back.  Uses save_regs + fixed
+   register positions (a0-a3) like the soft-float path for robustness. */
+static void gen_opf_fpu(int op)
+{
+    int ft = vtop[0].type.t & VT_BTYPE;
+    CType type = vtop[0].type;
+    int dbl = (ft == VT_DOUBLE || ft == VT_LDOUBLE);
+    int is_cmp = (op >= TOK_EQ && op <= TOK_GT) || op == TOK_NE;
+
+    /* Spill all live values and place args in fixed registers,
+       exactly like the soft-float path. */
+    save_regs(1);
+    if (dbl) {
+        gv(RC_R(2));  /* arg2 → a2 */
+        if (vtop->r2 != TREG_R(3)) {
+            EI(0x13, 0, 13, ireg(vtop->r2), 0); // mv a3, r2
+            vtop->r2 = TREG_R(3);
+        }
+        vswap();
+        gv(RC_R(0));  /* arg1 → a0 */
+        if (vtop->r2 != TREG_R(1)) {
+            EI(0x13, 0, 11, ireg(vtop->r2), 0); // mv a1, r2
+            vtop->r2 = TREG_R(1);
+        }
+        /* a0:a1 = arg1, a2:a3 = arg2.  Store to stack, load FP regs. */
+        EI(0x13, 0, 2, 2, -16);          // addi sp, sp, -16
+        ES(0x23, 2, 2, 10, 0);           // sw a0, 0(sp)
+        ES(0x23, 2, 2, 11, 4);           // sw a1, 4(sp)
+        ES(0x23, 2, 2, 12, 8);           // sw a2, 8(sp)
+        ES(0x23, 2, 2, 13, 12);          // sw a3, 12(sp)
+        EI(0x07, 3, FA0, 2, 0);          // fld fa0, 0(sp)
+        EI(0x07, 3, FA1, 2, 8);          // fld fa1, 8(sp)
+    } else {
+        gv(RC_R(1));  /* arg2 → a1 */
+        vswap();
+        gv(RC_R(0));  /* arg1 → a0 */
+        fmv_w_x(FA0, 10);                // fmv.w.x fa0, a0
+        fmv_w_x(FA1, 11);                // fmv.w.x fa1, a1
+    }
+
+    if (is_cmp) {
+        /* Produce a 0/1 boolean in a0 where 1 = condition true.
+           Then set VT_CMP with TOK_NE against x0 so the generic
+           branch/load machinery treats nonzero as "true". */
+        int f7 = dbl ? 0x51 : 0x50;
+
+        switch (op) {
+        case TOK_EQ:
+            ER(0x53, 2, 10, FA0, FA1, f7);  // feq a0, fa0, fa1
+            break;
+        case TOK_NE:
+            ER(0x53, 2, 10, FA0, FA1, f7);  // feq a0, fa0, fa1
+            EI(0x13, 4, 10, 10, 1);          // xori a0, a0, 1
+            break;
+        case TOK_LT:
+            ER(0x53, 1, 10, FA0, FA1, f7);  // flt a0, fa0, fa1
+            break;
+        case TOK_LE:
+            ER(0x53, 0, 10, FA0, FA1, f7);  // fle a0, fa0, fa1
+            break;
+        case TOK_GT:
+            ER(0x53, 1, 10, FA1, FA0, f7);  // flt a0, fa1, fa0
+            break;
+        case TOK_GE:
+            ER(0x53, 0, 10, FA1, FA0, f7);  // fle a0, fa1, fa0
+            break;
+        }
+
+        if (dbl)
+            EI(0x13, 0, 2, 2, 16);           // addi sp, sp, 16
+
+        vtop -= 2; /* pop both args */
+        vpushi(0);
+        vtop->r = REG_IRET;   /* result in a0 */
+        vtop->r2 = VT_CONST;
+        vset_VT_CMP(op);
+        vtop->cmp_r = 10 | (0 << 8);     /* compare a0 against x0 */
+        vtop->cmp_op = TOK_NE;           /* nonzero = condition true */
+        return;
+    }
+
+    /* Arithmetic: fadd/fsub/fmul/fdiv */
+    {
+        int f7;
+        switch (op) {
+        case '+': f7 = dbl ? 0x01 : 0x00; break;
+        case '-': f7 = dbl ? 0x05 : 0x04; break;
+        case '*': f7 = dbl ? 0x09 : 0x08; break;
+        case '/': f7 = dbl ? 0x0D : 0x0C; break;
+        default: assert(0); f7 = 0; break;
+        }
+        ER(0x53, 7, FA0, FA0, FA1, f7);  // fop fa0, fa0, fa1 (rm=dynamic)
+    }
+
+    /* Move result back to integer registers */
+    vtop -= 2; /* pop both args */
+    vpushi(0);
+    vtop->r = REG_IRET;
+    vtop->r2 = VT_CONST;
+    vtop->type = type;
+    if (dbl) {
+        ES(0x27, 3, 2, FA0, 0);          // fsd fa0, 0(sp)
+        EI(0x03, 2, 10, 2, 0);           // lw a0, 0(sp)
+        EI(0x03, 2, 11, 2, 4);           // lw a1, 4(sp)
+        EI(0x13, 0, 2, 2, 16);           // addi sp, sp, 16
+        vtop->r2 = TREG_R(1);
+    } else {
+        fmv_x_w(10, FA0);                // fmv.x.w a0, fa0
+    }
+}
+
 ST_FUNC void gen_opf(int op)
 {
+    if (tcc_state->fpu) {
+        gen_opf_fpu(op);
+        return;
+    }
     /* RV32IMA: no FPU, all float ops through library calls.
        Use save_regs+gcall_or_jmp instead of gfunc_call to avoid
        nested function call issues when used inside argument evaluation. */
@@ -1317,11 +1450,38 @@ ST_FUNC void gen_opf(int op)
 ST_FUNC void gen_cvt_itof(int t)
 {
     int u, l, func;
-    /* soft-float: use library calls.
-       Use save_regs+gcall_or_jmp to avoid nested gfunc_call issues. */
     u = vtop->type.t & VT_UNSIGNED;
     l = (vtop->type.t & VT_BTYPE) == VT_LLONG;
 
+    if (tcc_state->fpu && !l) {
+        /* Inline FPU: int32 → float/double */
+        save_regs(1);
+        gv(RC_R(0));  /* source int in a0 */
+
+        if (t == VT_FLOAT) {
+            /* fcvt.s.w / fcvt.s.wu  a0 → fa0 → a0 */
+            ER(0x53, 7, FA0, 10, u ? 1 : 0, 0x68);
+            fmv_x_w(10, FA0);
+        } else {
+            /* fcvt.d.w / fcvt.d.wu  a0 → fa0 → a0:a1 */
+            ER(0x53, 7, FA0, 10, u ? 1 : 0, 0x69);
+            EI(0x13, 0, 2, 2, -8);           // addi sp, sp, -8
+            ES(0x27, 3, 2, FA0, 0);           // fsd fa0, 0(sp)
+            EI(0x03, 2, 10, 2, 0);            // lw a0, 0(sp)
+            EI(0x03, 2, 11, 2, 4);            // lw a1, 4(sp)
+            EI(0x13, 0, 2, 2, 8);             // addi sp, sp, 8
+        }
+        vtop--;
+        vpushi(0);
+        vtop->type.t = t;
+        vtop->r = REG_IRET;
+        if (t == VT_DOUBLE || t == VT_LDOUBLE)
+            vtop->r2 = TREG_R(1);
+        return;
+    }
+
+    /* soft-float: use library calls.
+       Use save_regs+gcall_or_jmp to avoid nested gfunc_call issues. */
     if (t == VT_FLOAT) {
         if (l)
             func = u ? TOK___floatundisf : TOK___floatdisf;
@@ -1352,13 +1512,43 @@ ST_FUNC void gen_cvt_itof(int t)
 
 ST_FUNC void gen_cvt_ftoi(int t)
 {
-    /* soft-float: use library calls.
-       Use save_regs+gcall_or_jmp to avoid nested gfunc_call issues. */
     int ft = vtop->type.t & VT_BTYPE;
     int l = (t & VT_BTYPE) == VT_LLONG;
     int u = t & VT_UNSIGNED;
     int func;
 
+    if (tcc_state->fpu && !l) {
+        /* Inline FPU: float/double → int32 */
+        int dbl = (ft == VT_DOUBLE || ft == VT_LDOUBLE);
+        save_regs(1);
+        gv(RC_R(0));  /* source in a0 (or a0:a1 for double) */
+
+        if (dbl) {
+            if (vtop->r2 != TREG_R(1)) {
+                EI(0x13, 0, 11, ireg(vtop->r2), 0); // mv a1, r2
+                vtop->r2 = TREG_R(1);
+            }
+            EI(0x13, 0, 2, 2, -8);           // addi sp, sp, -8
+            ES(0x23, 2, 2, 10, 0);            // sw a0, 0(sp)
+            ES(0x23, 2, 2, 11, 4);            // sw a1, 4(sp)
+            EI(0x07, 3, FA0, 2, 0);           // fld fa0, 0(sp)
+            EI(0x13, 0, 2, 2, 8);             // addi sp, sp, 8
+        } else {
+            fmv_w_x(FA0, 10);                 // fmv.w.x fa0, a0
+        }
+
+        /* fcvt.w[u].s/d a0, fa0, rtz */
+        ER(0x53, 1, 10, FA0, u ? 1 : 0, dbl ? 0x61 : 0x60);
+
+        vtop--;
+        vpushi(0);
+        vtop->type.t = t;
+        vtop->r = REG_IRET;
+        return;
+    }
+
+    /* soft-float: use library calls.
+       Use save_regs+gcall_or_jmp to avoid nested gfunc_call issues. */
     if (ft == VT_FLOAT) {
         if (l)
             func = u ? TOK___fixunssfdi : TOK___fixsfdi;
@@ -1394,6 +1584,44 @@ ST_FUNC void gen_cvt_ftof(int dt)
     dt &= VT_BTYPE;
     if (st == dt)
       return;
+
+    if (tcc_state->fpu) {
+        /* Inline FPU: float↔double conversion */
+        save_regs(1);
+        gv(RC_R(0));  /* source in a0 (or a0:a1 for double) */
+
+        if (dt == VT_DOUBLE || dt == VT_LDOUBLE) {
+            /* float → double: a0 → fa0 → fcvt.d.s → a0:a1 */
+            fmv_w_x(FA0, 10);
+            ER(0x53, 0, FA0, FA0, 0, 0x21);   // fcvt.d.s fa0, fa0
+            EI(0x13, 0, 2, 2, -8);             // addi sp, sp, -8
+            ES(0x27, 3, 2, FA0, 0);             // fsd fa0, 0(sp)
+            EI(0x03, 2, 10, 2, 0);              // lw a0, 0(sp)
+            EI(0x03, 2, 11, 2, 4);              // lw a1, 4(sp)
+            EI(0x13, 0, 2, 2, 8);               // addi sp, sp, 8
+        } else {
+            /* double → float: a0:a1 → fa0 → fcvt.s.d → a0 */
+            if (vtop->r2 != TREG_R(1)) {
+                EI(0x13, 0, 11, ireg(vtop->r2), 0); // mv a1, r2
+                vtop->r2 = TREG_R(1);
+            }
+            EI(0x13, 0, 2, 2, -8);             // addi sp, sp, -8
+            ES(0x23, 2, 2, 10, 0);              // sw a0, 0(sp)
+            ES(0x23, 2, 2, 11, 4);              // sw a1, 4(sp)
+            EI(0x07, 3, FA0, 2, 0);             // fld fa0, 0(sp)
+            EI(0x13, 0, 2, 2, 8);               // addi sp, sp, 8
+            ER(0x53, 7, FA0, FA0, 1, 0x20);     // fcvt.s.d fa0, fa0
+            fmv_x_w(10, FA0);
+        }
+        vtop--;
+        vpushi(0);
+        vtop->type.t = dt;
+        vtop->r = REG_IRET;
+        if (dt == VT_DOUBLE || dt == VT_LDOUBLE)
+            vtop->r2 = TREG_R(1);
+        return;
+    }
+
     /* soft-float: use library calls for float<->double conversion */
     if (dt == VT_DOUBLE || dt == VT_LDOUBLE) {
         func = TOK___extendsfdf2;
