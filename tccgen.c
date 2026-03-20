@@ -158,6 +158,196 @@ static int get_temp_local_var(int size,int align,int *r2);
 static void cast_error(CType *st, CType *dt);
 static void end_switch(void);
 static void do_Static_assert(void);
+static const char* get_real_struct_name(Sym *struct_sym);
+
+/* Debug function tracking table */
+typedef struct DebugFuncHandler {
+    const char *func_name;
+    int func_type;
+    int expected_args;
+    void (*handler)(TCCState *s1, CType *arg_types, SValue *arg_values, int nb_args);
+} DebugFuncHandler;
+
+static void handle_debug_struct_call(TCCState *s1, CType *arg_types, SValue *arg_values, int nb_args);
+static void handle_debug_str_call(TCCState *s1, CType *arg_types, SValue *arg_values, int nb_args);
+static void handle_debug_num_call(TCCState *s1, CType *arg_types, SValue *arg_values, int nb_args);
+
+static const DebugFuncHandler debug_func_table[] = {
+    { "__debug_struct", DEBUG_FUNC_STRUCT, 5, handle_debug_struct_call },
+    { "__debug_str", DEBUG_FUNC_STR, 6, handle_debug_str_call },
+    { "__debug_num", DEBUG_FUNC_NUM, 5, handle_debug_num_call },
+    { NULL, 0, 0, NULL }  /* Sentinel */
+};
+
+static void handle_debug_struct_call(TCCState *s1, CType *arg_types, SValue *arg_values, int nb_args)
+{
+    DebugCallRecord *rec;
+    SValue *arg0, *arg1;
+    CType *arg2_type;
+
+    if (nb_args != 5) {
+        tcc_warning("__debug_struct expects 5 arguments, got %d", nb_args);
+        return;
+    }
+
+    /* Expand array if needed */
+    if (s1->nb_debug_calls >= s1->debug_calls_capacity) {
+        int new_cap = s1->debug_calls_capacity == 0 ? 16 : s1->debug_calls_capacity * 2;
+        DebugCallRecord *new_array = tcc_realloc(s1->debug_calls,
+                                                  new_cap * sizeof(DebugCallRecord));
+        if (!new_array) {
+            tcc_error("out of memory tracking debug calls");
+            return;
+        }
+        s1->debug_calls = new_array;
+        s1->debug_calls_capacity = new_cap;
+    }
+
+    rec = &s1->debug_calls[s1->nb_debug_calls];
+    memset(rec, 0, sizeof(DebugCallRecord));
+
+    rec->func_type = DEBUG_FUNC_STRUCT;
+
+    /* Extract arg 0: label string - take ownership */
+    arg0 = &arg_values[0];
+    if ((arg0->r & VT_VALMASK) == VT_CONST && arg0->c.str.data) {
+        rec->args.debug_struct.label = (char *)arg0->c.str.data;
+        arg0->c.str.data = NULL;  /* Mark as transferred to prevent double-free */
+    } else {
+        rec->args.debug_struct.label = tcc_strdup("<non-constant>");
+    }
+
+    /* Extract arg 1: counter (integer constant) */
+    arg1 = &arg_values[1];
+    if ((arg1->r & VT_VALMASK) == VT_CONST) {
+        rec->args.debug_struct.counter = (int)arg1->c.i;
+    } else {
+        rec->args.debug_struct.counter = -1;
+    }
+
+    /* Extract arg 2: struct name from pointer type */
+    arg2_type = &arg_types[2];
+    if ((arg2_type->t & VT_BTYPE) == VT_PTR && arg2_type->ref) {
+        CType *pointed = &arg2_type->ref->type;
+        if ((pointed->t & VT_BTYPE) == VT_STRUCT && pointed->ref) {
+            const char *name = get_real_struct_name(pointed->ref);
+            rec->args.debug_struct.struct_name = tcc_strdup(name ? name : "<anonymous>");
+            rec->args.debug_struct.is_union = (pointed->t & (1 << VT_STRUCT_SHIFT)) ? 1 : 0;
+        } else {
+            rec->args.debug_struct.struct_name = tcc_strdup("<not-a-struct-ptr>");
+        }
+    } else {
+        rec->args.debug_struct.struct_name = tcc_strdup("<not-a-pointer>");
+    }
+
+    s1->nb_debug_calls++;
+}
+
+static void handle_debug_str_call(TCCState *s1, CType *arg_types, SValue *arg_values, int nb_args)
+{
+    DebugCallRecord *rec;
+    SValue *arg0, *arg1;
+
+    if (nb_args != 6) {
+        tcc_warning("__debug_str expects 6 arguments, got %d", nb_args);
+        return;
+    }
+
+    /* Expand array if needed */
+    if (s1->nb_debug_calls >= s1->debug_calls_capacity) {
+        int new_cap = s1->debug_calls_capacity == 0 ? 16 : s1->debug_calls_capacity * 2;
+        DebugCallRecord *new_array = tcc_realloc(s1->debug_calls,
+                                                  new_cap * sizeof(DebugCallRecord));
+        if (!new_array) {
+            tcc_error("out of memory tracking debug calls");
+            return;
+        }
+        s1->debug_calls = new_array;
+        s1->debug_calls_capacity = new_cap;
+    }
+
+    rec = &s1->debug_calls[s1->nb_debug_calls];
+    memset(rec, 0, sizeof(DebugCallRecord));
+
+    rec->func_type = DEBUG_FUNC_STR;
+
+    /* Extract arg 0: label string - take ownership */
+    arg0 = &arg_values[0];
+    if ((arg0->r & VT_VALMASK) == VT_CONST && arg0->c.str.data) {
+        rec->args.debug_str.label = (char *)arg0->c.str.data;
+        arg0->c.str.data = NULL;  /* Mark as transferred to prevent double-free */
+    } else {
+        rec->args.debug_str.label = tcc_strdup("<non-constant>");
+    }
+
+    /* Extract arg 1: counter (integer constant) */
+    arg1 = &arg_values[1];
+    if ((arg1->r & VT_VALMASK) == VT_CONST) {
+        rec->args.debug_str.counter = (int)arg1->c.i;
+    } else {
+        rec->args.debug_str.counter = -1;
+    }
+
+    s1->nb_debug_calls++;
+}
+
+static void handle_debug_num_call(TCCState *s1, CType *arg_types, SValue *arg_values, int nb_args)
+{
+    DebugCallRecord *rec;
+    SValue *arg0, *arg1;
+    CType *arg2_type;
+
+    if (nb_args != 5) {
+        tcc_warning("__debug_num expects 5 arguments, got %d", nb_args);
+        return;
+    }
+
+    /* Expand array if needed */
+    if (s1->nb_debug_calls >= s1->debug_calls_capacity) {
+        int new_cap = s1->debug_calls_capacity == 0 ? 16 : s1->debug_calls_capacity * 2;
+        DebugCallRecord *new_array = tcc_realloc(s1->debug_calls,
+                                                  new_cap * sizeof(DebugCallRecord));
+        if (!new_array) {
+            tcc_error("out of memory tracking debug calls");
+            return;
+        }
+        s1->debug_calls = new_array;
+        s1->debug_calls_capacity = new_cap;
+    }
+
+    rec = &s1->debug_calls[s1->nb_debug_calls];
+    memset(rec, 0, sizeof(DebugCallRecord));
+
+    rec->func_type = DEBUG_FUNC_NUM;
+
+    /* Extract arg 0: label string - take ownership */
+    arg0 = &arg_values[0];
+    if ((arg0->r & VT_VALMASK) == VT_CONST && arg0->c.str.data) {
+        rec->args.debug_num.label = (char *)arg0->c.str.data;
+        arg0->c.str.data = NULL;  /* Mark as transferred to prevent double-free */
+    } else {
+        rec->args.debug_num.label = tcc_strdup("<non-constant>");
+    }
+
+    /* Extract arg 1: counter (integer constant) */
+    arg1 = &arg_values[1];
+    if ((arg1->r & VT_VALMASK) == VT_CONST) {
+        rec->args.debug_num.counter = (int)arg1->c.i;
+    } else {
+        rec->args.debug_num.counter = -1;
+    }
+
+    /* Extract arg 2: check signedness from pointed-to type */
+    arg2_type = &arg_types[2];
+    if ((arg2_type->t & VT_BTYPE) == VT_PTR && arg2_type->ref) {
+        CType *pointed = &arg2_type->ref->type;
+        rec->args.debug_num.is_signed = !(pointed->t & VT_UNSIGNED);
+    } else {
+        rec->args.debug_num.is_signed = 0;
+    }
+
+    s1->nb_debug_calls++;
+}
 
 /* ------------------------------------------------------------------------- */
 /* Automagical code suppression */
@@ -714,6 +904,21 @@ ST_INLN Sym *sym_find(int v)
     if ((unsigned)v >= (unsigned)(tok_ident - TOK_IDENT))
         return NULL;
     return table_ident[v]->sym_identifier;
+}
+
+/* Helper to get real struct name - returns NULL for anonymous/generated names */
+static const char* get_real_struct_name(Sym *struct_sym)
+{
+    const char *name;
+    if (!struct_sym || struct_sym->v < TOK_IDENT)
+        return NULL;
+
+    /* Use get_tok_str() and filter generated labels (L.*) */
+    name = get_tok_str(struct_sym->v & ~SYM_STRUCT, NULL);
+    if (name && !(name[0] == 'L' && name[1] == '.')) {
+        return name;
+    }
+    return NULL;
 }
 
 /* make sym in-/visible to the parser */
@@ -4792,6 +4997,12 @@ static int parse_btype(CType *type, AttributeDef *ad, int ignore_label)
             }
             next();
             break;
+        case TOK_INT128:
+        case TOK_UINT128:
+            /* __int128 and __uint128_t appear in some Linux header files.
+               Use VT_QLONG (128-bit integer type) for parse-level tolerance. */
+            u = VT_QLONG;
+            goto basic_type;
         case TOK_BOOL:
             u = VT_BOOL;
             goto basic_type;
@@ -5797,6 +6008,58 @@ ST_FUNC void unary(void)
 	parse_builtin_params(0, "ee");
 	vpop();
         break;
+    case TOK_builtin_classify_type:
+	parse_builtin_params(0, "e");
+	{
+	    int t = vtop->type.t;
+	    int type_class;
+
+	    if (t & VT_ARRAY) {
+		type_class = 14;
+	    } else if (IS_ENUM(t)) {
+		type_class = 3;
+	    } else {
+		switch (t & VT_BTYPE) {
+		case VT_VOID:
+		    type_class = 0;
+		    break;
+		case VT_BOOL:
+		    type_class = 4;
+		    break;
+		case VT_PTR:
+		    type_class = 5;
+		    break;
+		case VT_BYTE:
+		case VT_SHORT:
+		case VT_INT:
+		case VT_LLONG:
+		case VT_QLONG:
+		    type_class = 1;
+		    break;
+		case VT_FLOAT:
+		case VT_DOUBLE:
+		case VT_LDOUBLE:
+		case VT_QFLOAT:
+		    type_class = 8;
+		    break;
+		case VT_FUNC:
+		    type_class = 10;
+		    break;
+		case VT_STRUCT:
+		    if (IS_UNION(t))
+			type_class = 13;
+		    else
+			type_class = 12;
+		    break;
+		default:
+		    type_class = 1;
+		    break;
+		}
+	    }
+	    vtop--;
+	    vpushi(type_class);
+	}
+        break;
     case TOK_builtin_types_compatible_p:
 	parse_builtin_params(0, "tt");
 	vtop[-1].type.t &= ~(VT_CONSTANT | VT_VOLATILE);
@@ -6180,6 +6443,13 @@ special_math_val:
             Sym *sa;
             int nb_args, ret_nregs, ret_align, regsize, variadic;
             TokenString *p, *p2;
+            const DebugFuncHandler *debug_handler = NULL;
+            CType debug_arg_types[8];
+            SValue debug_arg_values[8];
+            char *debug_saved_strings[8];
+            int debug_saved_nb_args = 0;
+
+            memset(debug_saved_strings, 0, sizeof(debug_saved_strings));
 
             /* function call  */
             if ((vtop->type.t & VT_BTYPE) != VT_FUNC) {
@@ -6195,6 +6465,22 @@ special_math_val:
             } else {
                 vtop->r &= ~VT_LVAL; /* no lvalue */
             }
+
+            /* Check if this is a tracked debug function */
+            if (vtop->r & VT_SYM) {
+                Sym *func_sym = vtop->sym;
+                if (func_sym && func_sym->v >= TOK_IDENT) {
+                    const char *func_name = get_tok_str(func_sym->v, NULL);
+                    const DebugFuncHandler *h;
+                    for (h = debug_func_table; h->func_name; h++) {
+                        if (strcmp(func_name, h->func_name) == 0) {
+                            debug_handler = h;
+                            break;
+                        }
+                    }
+                }
+            }
+
             /* get return type */
             s = vtop->type.ref;
             next();
@@ -6249,14 +6535,47 @@ special_math_val:
             if (tok != ')') {
                 r = tcc_state->reverse_funcargs;
                 for(;;) {
+                    /* Save string literal before expr_eq() processes it */
+                    CString saved_tokc_str = {0, NULL, 0};
+                    int was_string_tok = (tok == TOK_STR);
+                    if (was_string_tok && debug_handler) {
+                        /* Make a copy of the string data from tokc */
+                        if (tokc.str.size > 0 && tokc.str.data) {
+                            saved_tokc_str.size = tokc.str.size;
+                            saved_tokc_str.data = tcc_malloc(tokc.str.size + 1);
+                            if (saved_tokc_str.data) {
+                                memcpy(saved_tokc_str.data, tokc.str.data, tokc.str.size);
+                                ((char *)saved_tokc_str.data)[tokc.str.size] = '\0';
+                            }
+                        }
+                    }
+
                     if (r) {
                         skip_or_save_block(&p2);
                         p2->prev = p, p = p2;
                     } else {
                         expr_eq();
+                        /* Save argument type and value for debug function tracking */
+                        if (debug_handler && debug_saved_nb_args < 8) {
+                            debug_arg_types[debug_saved_nb_args] = vtop->type;
+                            debug_arg_values[debug_saved_nb_args] = *vtop;
+
+                            /* Use the saved string literal if we had one */
+                            if (was_string_tok && saved_tokc_str.data) {
+                                debug_saved_strings[debug_saved_nb_args] = (char *)saved_tokc_str.data;
+                                debug_arg_values[debug_saved_nb_args].c.str.data = saved_tokc_str.data;
+                                debug_arg_values[debug_saved_nb_args].c.str.size = saved_tokc_str.size;
+                                saved_tokc_str.data = NULL; /* ownership transferred */
+                            }
+                        }
+                        if (saved_tokc_str.data) {
+                            /* Free if we're not using it */
+                            tcc_free(saved_tokc_str.data);
+                        }
                         gfunc_param_typed(s, sa);
                     }
                     nb_args++;
+                    debug_saved_nb_args++;
                     if (sa)
                         sa = sa->next;
                     if (tok == ')')
@@ -6264,8 +6583,33 @@ special_math_val:
                     skip(',');
                 }
             }
-            if (sa)
-                tcc_error("too few arguments to function");
+            if (sa) {
+                char buf[1024];
+                char type_buf[256];
+                Sym *_p = sa;
+                int count = 0;
+
+                strcpy(buf, "missing arguments: ");
+
+                while (_p) {
+                    int name_tok = _p->v & ~SYM_FIELD;
+                    const char *param_name = NULL;
+
+                    if (count > 0)
+                        pstrcat(buf, sizeof(buf), ", ");
+
+                    if (name_tok >= TOK_IDENT && name_tok < SYM_FIRST_ANOM)
+                        param_name = get_tok_str(name_tok, NULL);
+
+                    type_to_str(type_buf, sizeof(type_buf), &_p->type, param_name);
+                    pstrcat(buf, sizeof(buf), type_buf);
+
+                    _p = _p->next;
+                    count++;
+                }
+
+                tcc_error("%s", buf);
+            }
 
             if (p) { /* with reverse_funcargs */
                 for (n = 0; p; p = p2, ++n) {
@@ -6283,6 +6627,21 @@ special_math_val:
             }
 
             next();
+
+            /* Invoke debug function handler if matched */
+            if (debug_handler) {
+                int di;
+                debug_handler->handler(tcc_state, debug_arg_types, debug_arg_values, debug_saved_nb_args);
+
+                /* Free saved string copies that weren't transferred */
+                for (di = 0; di < debug_saved_nb_args && di < 8; di++) {
+                    if (debug_saved_strings[di] && debug_arg_values[di].c.str.data == debug_saved_strings[di]) {
+                        /* Handler didn't take ownership (string still in arg_values) */
+                        tcc_free(debug_saved_strings[di]);
+                    }
+                }
+            }
+
             vcheck_cmp(); /* the generators don't like VT_CMP on vtop */
             gfunc_call(nb_args);
 
@@ -8507,7 +8866,9 @@ static void gen_function(Sym *sym)
     struct scope f = { 0 };
 
     cur_scope = root_scope = &f;
+#ifndef TCC_SYNTAX_ONLY
     nocode_wanted = 0;
+#endif
 
     ind = cur_text_section->data_offset;
     if (sym->a.aligned) {
@@ -8547,7 +8908,9 @@ static void gen_function(Sym *sym)
     func_vla_arg(sym);
     block(0);
     gsym(rsym);
+#ifndef TCC_SYNTAX_ONLY
     nocode_wanted = 0;
+#endif
     tcc_debug_end_scope(NULL, !func_var);
     tcc_debug_prolog_epilog(tcc_state, 1);
     gfunc_epilog();

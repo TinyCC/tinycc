@@ -18,7 +18,7 @@ LIBTCCAPI void tcc_set_realloc(TCCReallocFunc *my_realloc);
 typedef struct TCCState TCCState;
 
 /* create a new TCC compilation context */
-LIBTCCAPI TCCState *tcc_new(void);
+LIBTCCAPI TCCState *tcc_new(unsigned int arena_size_bytes);
 
 /* free a TCC compilation context */
 LIBTCCAPI void tcc_delete(TCCState *s);
@@ -26,8 +26,16 @@ LIBTCCAPI void tcc_delete(TCCState *s);
 /* set CONFIG_TCCDIR at runtime */
 LIBTCCAPI void tcc_set_lib_path(TCCState *s, const char *path);
 
+/* Error information structure passed to error callback */
+typedef struct TCCErrorInfo {
+    const char *filename;    /* file where error occurred, or NULL if no file context */
+    int line_num;            /* line number where error occurred, or 0 if no line context */
+    int is_warning;          /* 1 if this is a warning, 0 if it's an error */
+    const char *msg;         /* the formatted error/warning message */
+} TCCErrorInfo;
+
 /* set error/warning callback (optional) */
-typedef void TCCErrorFunc(void *opaque, const char *msg);
+typedef void TCCErrorFunc(void *opaque, const TCCErrorInfo *info);
 LIBTCCAPI void tcc_set_error_func(TCCState *s, void *error_opaque, TCCErrorFunc *error_func);
 
 /* set options as from command line (multiple supported) */
@@ -54,8 +62,26 @@ LIBTCCAPI void tcc_undefine_symbol(TCCState *s, const char *sym);
 /* add a file (C file, dll, object, library, ld script). Return -1 if error. */
 LIBTCCAPI int tcc_add_file(TCCState *s, const char *filename);
 
+/* Buffer writer for type export */
+typedef struct TCCBufWriter {
+    char *buf;      /* output buffer */
+    int pos;        /* current position in buffer */
+    int size;       /* total buffer size */
+    int full;       /* set to 1 if buffer became full during writing */
+} TCCBufWriter;
+
 /* compile a string containing a C source. Return -1 if error. */
 LIBTCCAPI int tcc_compile_string(TCCState *s, const char *buf);
+
+/* compile and optionally write type info to buffer.
+   If w is not NULL, writes JSON array of struct/union definitions.
+   Check w->full after to see if buffer was too small.
+   Return -1 if error. */
+LIBTCCAPI int tcc_compile_string_ex(TCCState *s, const char *buf, TCCBufWriter *w);
+
+/* Get debug function calls as JSON array.
+   Returns -1 if error or buffer too small (check w->full). */
+LIBTCCAPI int tcc_get_debug_calls(TCCState *s, TCCBufWriter *w);
 
 /* Tip: to have more specific errors/warnings from tcc_compile_string(),
    you can prefix the string with "#line <num> \"<filename>\"\n" */

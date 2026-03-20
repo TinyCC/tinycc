@@ -2945,8 +2945,6 @@ static int elf_output_file(TCCState *s1, const char *filename)
                 /* allow override the dynamic loader */
                 const char *elfint = s1->elfint;
                 if (elfint == NULL)
-                    elfint = getenv("LD_SO");
-                if (elfint == NULL)
                     elfint = DEFAULT_ELFINTERP(s1);
                 /* add interpreter section only if executable */
                 interp = new_section(s1, ".interp", SHT_PROGBITS, SHF_ALLOC);

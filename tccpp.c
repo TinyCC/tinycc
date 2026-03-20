@@ -3367,8 +3367,31 @@ static int macro_subst_tok(
                        var arg argument if it is omitted */
                     if (sa->type.t && gnu_ext)
                         goto empty_arg;
-                    tcc_error("macro '%s' used with too few args",
-                        get_tok_str(v, 0));
+                    {
+                        char buf[1024];
+                        Sym *p = sa;
+                        int count = 0;
+
+                        snprintf(buf, sizeof(buf), "macro '%s' missing arguments: ",
+                                 get_tok_str(v, 0));
+
+                        while (p) {
+                            int name_tok = p->v & ~SYM_FIELD;
+
+                            if (count > 0)
+                                pstrcat(buf, sizeof(buf), ", ");
+
+                            if (name_tok >= TOK_IDENT && name_tok < SYM_FIRST_ANOM)
+                                pstrcat(buf, sizeof(buf), get_tok_str(name_tok, NULL));
+                            else
+                                pstrcat(buf, sizeof(buf), "<unnamed>");
+
+                            p = p->next;
+                            count++;
+                        }
+
+                        tcc_error("%s", buf);
+                    }
                 }
                 i = 1;
             }

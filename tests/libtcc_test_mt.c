@@ -55,9 +55,15 @@ void sleep_ms(unsigned n)
 }
 #endif
 
-void handle_error(void *opaque, const char *msg)
+void handle_error(void *opaque, const TCCErrorInfo *info)
 {
-    fprintf(opaque, "%s\n", msg);
+    if (info->filename) {
+        if (info->line_num)
+            fprintf(opaque, "%s:%d: ", info->filename, info->line_num);
+        else
+            fprintf(opaque, "%s: ", info->filename);
+    }
+    fprintf(opaque, "%s: %s\n", info->is_warning ? "warning" : "error", info->msg);
 }
 
 /* this function is called by the generated code */
@@ -140,7 +146,7 @@ int backtrace_func(
 
 TCCState *new_state(int w)
 {
-    TCCState *s = tcc_new();
+    TCCState *s = tcc_new(0);
     if (!s) {
         fprintf(stderr, __FILE__ ": could not create tcc state\n");
         exit(1);

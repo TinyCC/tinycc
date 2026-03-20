@@ -49,6 +49,8 @@
      DEF(TOK_FLOAT, "float")
      DEF(TOK_DOUBLE, "double")
      DEF(TOK_BOOL, "_Bool")
+     DEF(TOK_INT128, "__int128")
+     DEF(TOK_UINT128, "__uint128_t")
      DEF(TOK_COMPLEX, "_Complex")
      DEF(TOK_SHORT, "short")
      DEF(TOK_LONG, "long")
@@ -170,6 +172,7 @@
      DEF(TOK_builtin_frame_address, "__builtin_frame_address")
      DEF(TOK_builtin_return_address, "__builtin_return_address")
      DEF(TOK_builtin_expect, "__builtin_expect")
+     DEF(TOK_builtin_classify_type, "__builtin_classify_type")
      DEF(TOK_builtin_unreachable, "__builtin_unreachable")
      /*DEF(TOK_builtin_va_list, "__builtin_va_list")*/
 #if defined TCC_TARGET_PE && defined TCC_TARGET_X86_64

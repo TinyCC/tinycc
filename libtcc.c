@@ -235,6 +235,40 @@ static void tcc_concat_str(char **pp, const char *str, int sep)
 #undef free
 #undef realloc
 
+static struct {
+    char *base;
+    size_t offset;
+    size_t size;
+} tcc_arena;
+
+PUB_FUNC void tcc_arena_init(unsigned int size_bytes)
+{
+    if (size_bytes == 0)
+        return; /* no arena requested, use standard allocator */
+    if (tcc_arena.base) {
+        if (size_bytes <= tcc_arena.size)
+            return;
+        free(tcc_arena.base);
+    }
+    tcc_arena.base = malloc(size_bytes);
+    if (!tcc_arena.base) {
+        fprintf(stderr, "fatal: could not allocate arena\n");
+        exit(1);
+    }
+    tcc_arena.offset = 0;
+    tcc_arena.size = size_bytes;
+}
+
+PUB_FUNC void tcc_arena_free(void)
+{
+    tcc_arena.offset = 0;
+}
+
+PUB_FUNC size_t tcc_arena_watermark(void)
+{
+    return tcc_arena.offset;
+}
+
 static void *default_reallocator(void *ptr, unsigned long size)
 {
     void *ptr1;
@@ -278,16 +312,61 @@ LIBTCCAPI void tcc_set_realloc(TCCReallocFunc *realloc)
 
 PUB_FUNC void tcc_free(void *ptr)
 {
+    if (tcc_arena.base)
+        return; /* arena mode: no individual frees */
     reallocator(ptr, 0);
 }
 
 PUB_FUNC void *tcc_malloc(unsigned long size)
 {
+    if (tcc_arena.base) {
+        void *ptr;
+        size_t aligned_size, total_size;
+        size_t *size_ptr;
+
+        total_size = sizeof(size_t) + size;
+        aligned_size = (total_size + 15) & ~15;
+
+        if (tcc_arena.offset + aligned_size > tcc_arena.size) {
+            fprintf(stderr, "fatal: arena exhausted (requested %lu bytes, %zu bytes available)\n",
+                    size, tcc_arena.size - tcc_arena.offset);
+            exit(1);
+        }
+
+        size_ptr = (size_t *)(tcc_arena.base + tcc_arena.offset);
+        *size_ptr = size;
+        ptr = (void *)(size_ptr + 1);
+        tcc_arena.offset += aligned_size;
+
+        return ptr;
+    }
     return reallocator(0, size);
 }
 
 PUB_FUNC void *tcc_realloc(void *ptr, unsigned long size)
 {
+    if (tcc_arena.base) {
+        void *new_ptr;
+        size_t old_size, copy_size;
+        size_t *size_ptr;
+
+        if (!ptr)
+            return tcc_malloc(size);
+
+        if (size == 0) {
+            tcc_free(ptr);
+            return NULL;
+        }
+
+        size_ptr = ((size_t *)ptr) - 1;
+        old_size = *size_ptr;
+
+        new_ptr = tcc_malloc(size);
+        copy_size = old_size < size ? old_size : size;
+        memcpy(new_ptr, ptr, copy_size);
+
+        return new_ptr;
+    }
     return reallocator(ptr, size);
 }
 
@@ -623,6 +702,7 @@ static void error1(int mode, const char *fmt, va_list ap)
     BufferedFile **pf, *f;
     TCCState *s1 = tcc_state;
     CString cs;
+    TCCErrorInfo error_info;
     int line = 0;
 
     tcc_exit_state(s1);
@@ -654,32 +734,53 @@ static void error1(int mode, const char *fmt, va_list ap)
         for (f = file; f && f->filename[0] == ':'; f = f->prev)
             ;
     }
+
+    /* Build structured error info */
     if (f) {
-        for(pf = s1->include_stack; pf < s1->include_stack_ptr; pf++)
-            cstr_printf(&cs, "In file included from %s:%d:\n",
-                (*pf)->filename, (*pf)->line_num - 1);
         if (0 == line)
             line = f->line_num - ((tok_flags & TOK_FLAG_BOL) && !macro_ptr);
-        cstr_printf(&cs, "%s:%d: ", f->filename, line);
+        error_info.filename = f->filename;
+        error_info.line_num = line;
     } else if (s1->current_filename) {
-        cstr_printf(&cs, "%s: ", s1->current_filename);
+        error_info.filename = s1->current_filename;
+        error_info.line_num = 0;
     } else {
-        cstr_printf(&cs, "tcc: ");
+        error_info.filename = NULL;
+        error_info.line_num = 0;
     }
-    cstr_printf(&cs, mode == ERROR_WARN ? "warning: " : "error: ");
+    error_info.is_warning = (mode == ERROR_WARN);
+
     if (pp_expr > 1)
         pp_error(&cs); /* special handler for preprocessor expression errors */
     else
         cstr_vprintf(&cs, fmt, ap);
+
+    error_info.msg = (char*)cs.data;
+
     if (!s1->error_func) {
         /* default case: stderr */
         if (s1 && s1->output_type == TCC_OUTPUT_PREPROCESS && s1->ppfp == stdout)
             printf("\n"); /* print a newline during tcc -E */
         fflush(stdout); /* flush -v output */
-        fprintf(stderr, "%s\n", (char*)cs.data);
+
+        for(pf = s1->include_stack; pf < s1->include_stack_ptr; pf++)
+            fprintf(stderr, "In file included from %s:%d:\n",
+                (*pf)->filename, (*pf)->line_num - 1);
+
+        if (error_info.filename) {
+            if (error_info.line_num)
+                fprintf(stderr, "%s:%d: ", error_info.filename, error_info.line_num);
+            else
+                fprintf(stderr, "%s: ", error_info.filename);
+        } else {
+            fprintf(stderr, "tcc: ");
+        }
+
+        fprintf(stderr, "%s: %s\n", mode == ERROR_WARN ? "warning" : "error",
+                (char*)cs.data);
         fflush(stderr); /* print error/warning now (win32) */
     } else {
-        s1->error_func(s1->error_opaque, (char*)cs.data);
+        s1->error_func(s1->error_opaque, &error_info);
     }
     cstr_free(&cs);
     if (mode != ERROR_WARN)
@@ -790,6 +891,15 @@ ST_FUNC int tcc_open(TCCState *s1, const char *filename)
     return 0;
 }
 
+/* Use the public TCCBufWriter type internally */
+typedef TCCBufWriter BufWriter;
+
+static void buf_puts(BufWriter *w, const char *s);
+static void buf_putc(BufWriter *w, char c);
+static void buf_printf(BufWriter *w, const char *fmt, ...);
+static void json_write_struct(BufWriter *w, TCCState *s1, Sym *s, const char *name, int *first);
+static void json_write_debug_calls(BufWriter *w, TCCState *s1);
+
 /* compile the file opened in 'file'. Return non zero if errors. */
 static int tcc_compile(TCCState *s1, int filetype, const char *str, int fd, const char *filename)
 {
@@ -846,7 +956,59 @@ static int tcc_compile(TCCState *s1, int filetype, const char *str, int fd, cons
 
 LIBTCCAPI int tcc_compile_string(TCCState *s, const char *str)
 {
-    return tcc_compile(s, s->filetype, str, -1, NULL);
+    return tcc_compile_string_ex(s, str, NULL);
+}
+
+LIBTCCAPI int tcc_compile_string_ex(TCCState *s, const char *str, BufWriter *w)
+{
+    int ret;
+
+    ret = tcc_compile(s, s->filetype, str, -1, NULL);
+
+    /* generate JSON export of type definitions if requested */
+    if (w && w->buf && w->size > 0) {
+        buf_puts(w, "[\n");
+        {
+            int first = 1;
+            int i;
+            for (i = TOK_IDENT; i < tok_ident; i++) {
+                TokenSym *ts = table_ident[i - TOK_IDENT];
+                if (ts && ts->sym_struct) {
+                    json_write_struct(w, s, ts->sym_struct, ts->str, &first);
+                }
+                if (w->full) break;
+            }
+        }
+        if (w->full) {
+            w->buf[0] = '\0';
+        } else {
+            buf_puts(w, "\n]\n");
+            /* Null-terminate the buffer */
+            if (w->pos < w->size) {
+                w->buf[w->pos] = '\0';
+            }
+        }
+    }
+
+    return ret;
+}
+
+LIBTCCAPI int tcc_get_debug_calls(TCCState *s, TCCBufWriter *w)
+{
+    if (!s || !w) return -1;
+
+    w->pos = 0;
+    w->full = 0;
+
+    if (w->buf && w->size > 0) {
+        json_write_debug_calls((BufWriter *)w, s);
+
+        if (!w->full && w->pos < w->size) {
+            w->buf[w->pos] = '\0';
+        }
+    }
+
+    return w->full ? -1 : 0;
 }
 
 LIBTCCAPI int tcc_compile_string_file(TCCState *s, const char *str, const char *filename)
@@ -872,10 +1034,11 @@ LIBTCCAPI void tcc_undefine_symbol(TCCState *s1, const char *sym)
 }
 
 
-LIBTCCAPI TCCState *tcc_new(void)
+LIBTCCAPI TCCState *tcc_new(unsigned int arena_size_bytes)
 {
     TCCState *s;
 
+    tcc_arena_init(arena_size_bytes);
     s = tcc_mallocz(sizeof(TCCState));
 #ifdef MEM_DEBUG
     tcc_memcheck(1);
@@ -891,6 +1054,10 @@ LIBTCCAPI TCCState *tcc_new(void)
     s->warn_discarded_qualifiers = 1;
     s->ms_extensions = 1;
     s->unwind_tables = 1;
+
+    s->debug_calls = NULL;
+    s->nb_debug_calls = 0;
+    s->debug_calls_capacity = 0;
 
 #ifdef CHAR_IS_UNSIGNED
     s->char_is_unsigned = 1;
@@ -959,10 +1126,30 @@ LIBTCCAPI void tcc_delete(TCCState *s1)
 #endif
     /* free loaded dlls array */
     dynarray_reset(&s1->loaded_dlls, &s1->nb_loaded_dlls);
+
+    /* Free debug call records */
+    if (s1->debug_calls) {
+        int i;
+        for (i = 0; i < s1->nb_debug_calls; i++) {
+            DebugCallRecord *rec = &s1->debug_calls[i];
+
+            switch (rec->func_type) {
+                case DEBUG_FUNC_STRUCT:
+                    if (rec->args.debug_struct.label)
+                        tcc_free((void *)rec->args.debug_struct.label);
+                    if (rec->args.debug_struct.struct_name)
+                        tcc_free((void *)rec->args.debug_struct.struct_name);
+                    break;
+            }
+        }
+        tcc_free(s1->debug_calls);
+    }
+
     tcc_free(s1);
 #ifdef MEM_DEBUG
     tcc_memcheck(-1);
 #endif
+    tcc_arena_free();
 }
 
 LIBTCCAPI int tcc_set_output_type(TCCState *s, int output_type)
@@ -1088,11 +1275,7 @@ static int tcc_add_binary(TCCState *s1, int flags, const char *filename, int fd)
     case AFF_BINTYPE_DYN:
         if (s1->output_type == TCC_OUTPUT_MEMORY) {
 #ifdef TCC_IS_NATIVE
-            void* dl = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
-            if (dl)
-                tcc_add_dllref(s1, filename, 0)->handle = dl;
-            else
-                ret = FILE_NOT_RECOGNIZED;
+            fprintf(stderr, "tried to dlopen %s\n", filename);
 #endif
         } else
             ret = tcc_load_dll(s1, fd, filename, (flags & AFF_REFERENCED_DLL) != 0);
@@ -1720,6 +1903,7 @@ static const FlagDef options_f[] = {
     { offsetof(TCCState, leading_underscore), 0, "leading-underscore" },
     { offsetof(TCCState, ms_extensions), 0, "ms-extensions" },
     { offsetof(TCCState, dollars_in_identifiers), 0, "dollars-in-identifiers" },
+    { offsetof(TCCState, syntax_only), 0, "syntax-only" },
     { offsetof(TCCState, test_coverage), 0, "test-coverage" },
     { offsetof(TCCState, reverse_funcargs), 0, "reverse-funcargs" },
     { offsetof(TCCState, gnu89_inline), 0, "gnu89-inline" },
@@ -2239,6 +2423,388 @@ LIBTCCAPI int tcc_set_options(TCCState *s, const char *r)
     dynarray_reset(&argv, &argc);
     return ret;
 }
+
+/********************************************************/
+/* JSON Export - Direct Buffer Writing */
+
+static void buf_puts(BufWriter *w, const char *s)
+{
+    if (w->full) return;  /* Already full, skip */
+    int len = strlen(s);
+    if (w->pos + len < w->size) {
+        memcpy(w->buf + w->pos, s, len);
+        w->pos += len;
+    } else {
+        w->full = 1;
+    }
+}
+
+static void buf_putc(BufWriter *w, char c)
+{
+    if (w->full) return;  /* Already full, skip */
+    if (w->pos < w->size) {
+        w->buf[w->pos++] = c;
+    } else {
+        w->full = 1;
+    }
+}
+
+static void buf_printf(BufWriter *w, const char *fmt, ...)
+{
+    if (w->full) return;  /* Already full, skip */
+    if (w->pos >= w->size) {
+        w->full = 1;
+        return;
+    }
+    va_list args;
+    va_start(args, fmt);
+    int written = vsnprintf(w->buf + w->pos, w->size - w->pos, fmt, args);
+    va_end(args);
+    if (written > 0 && w->pos + written < w->size) {
+        w->pos += written;
+    } else {
+        w->full = 1;
+    }
+}
+
+static void json_write_base_type_name(BufWriter *w, TCCState *s1, CType *type, int omit_struct_union_keyword, int omit_unsigned)
+{
+    int bt = type->t & VT_BTYPE;
+    int is_unsigned = type->t & VT_UNSIGNED;
+    int is_long = type->t & VT_LONG;
+
+    /* Check if this is a typedef - if ref has a valid identifier name that's not a struct */
+    if (type->ref && type->ref->v >= TOK_IDENT && !(type->ref->v & SYM_STRUCT) && bt != VT_STRUCT) {
+        const char *name = get_tok_str(type->ref->v, NULL);
+        /* Only use it if it doesn't look like a generated label (starts with 'L.') */
+        if (name && !(name[0] == 'L' && name[1] == '.')) {
+            buf_puts(w, name);
+            return;
+        }
+    }
+
+    if (bt == VT_STRUCT) {
+        if (!omit_struct_union_keyword) {
+            if (type->t & (1 << VT_STRUCT_SHIFT))
+                buf_puts(w, "union ");
+            else
+                buf_puts(w, "struct ");
+        }
+        if (type->ref && type->ref->v >= TOK_IDENT) {
+            const char *name = get_tok_str(type->ref->v & ~SYM_STRUCT, NULL);
+            /* Check if this is a generated label (anonymous type) */
+            if (name && name[0] == 'L' && name[1] == '.') {
+                buf_puts(w, "<anonymous>");
+            } else {
+                buf_puts(w, name);
+            }
+        } else {
+            buf_puts(w, "<anonymous>");
+        }
+        return;
+    }
+
+    if (bt == VT_FUNC) {
+        buf_puts(w, "function");
+        return;
+    }
+
+    if (!omit_unsigned && is_unsigned && bt != VT_BYTE)
+        buf_puts(w, "unsigned ");
+
+    switch (bt) {
+        case VT_VOID: buf_puts(w, "void"); break;
+        case VT_BYTE:
+            if (!omit_unsigned)
+                buf_puts(w, is_unsigned ? "unsigned char" : "char");
+            else
+                buf_puts(w, "char");
+            break;
+        case VT_SHORT: buf_puts(w, "short"); break;
+        case VT_INT: buf_puts(w, is_long ? "long" : "int"); break;
+        case VT_LLONG: buf_puts(w, "long long"); break;
+        case VT_FLOAT: buf_puts(w, "float"); break;
+        case VT_DOUBLE: buf_puts(w, is_long ? "long double" : "double"); break;
+        case VT_BOOL: buf_puts(w, "_Bool"); break;
+        default: buf_puts(w, "unknown"); break;
+    }
+}
+
+static void json_write_struct_members(BufWriter *w, TCCState *s1, Sym *s, int indent)
+{
+    Sym *m = s->next;
+    int first = 1;
+
+    while (m) {
+        if (w->full) return;  /* Stop processing if buffer is full */
+
+        if (!(m->v & SYM_FIELD)) {
+            m = m->next;
+            continue;
+        }
+
+        if (!first)
+            buf_puts(w, ",\n");
+        first = 0;
+
+        {
+            int i;
+            for (i = 0; i < indent; i++) buf_puts(w, "  ");
+        }
+        buf_puts(w, "{");
+
+        buf_puts(w, "\"name\": \"");
+        if (m->v >= TOK_IDENT) {
+            const char *name = get_tok_str(m->v & ~SYM_FIELD, NULL);
+            buf_puts(w, name);
+        } else {
+            buf_puts(w, "<anonymous>");
+        }
+        buf_putc(w, '"');
+
+        {
+            CType type_copy = m->type;
+            int is_array = type_copy.t & VT_ARRAY;
+            int array_size = -1;
+            int is_pointer = 0;
+            int final_bt, is_struct_or_union, is_scalar, is_anonymous;
+
+            /* Handle arrays first (arrays have VT_PTR in BTYPE too) */
+            if (is_array) {
+                if (type_copy.ref && type_copy.ref->c >= 0)
+                    array_size = type_copy.ref->c;
+                type_copy.t &= ~VT_ARRAY;
+                /* Get element type from ref */
+                if (type_copy.ref && type_copy.ref->type.t) {
+                    type_copy = type_copy.ref->type;
+                }
+            }
+
+            /* Now check for pointers (only if not already handled as array) */
+            {
+                int bt = type_copy.t & VT_BTYPE;
+                if (!is_array && bt == VT_PTR) {
+                    is_pointer = 1;
+                    if (type_copy.ref) {
+                        type_copy = type_copy.ref->type;
+                    } else {
+                        type_copy.t = VT_VOID;
+                    }
+                }
+            }
+
+            final_bt = type_copy.t & VT_BTYPE;
+            is_struct_or_union = (final_bt == VT_STRUCT);
+            is_scalar = !is_pointer && !is_array && !is_struct_or_union;
+
+            /* Check if this is an anonymous struct/union */
+            is_anonymous = 0;
+            if (is_struct_or_union && type_copy.ref) {
+                const char *struct_name = NULL;
+                if (type_copy.ref->v >= TOK_IDENT) {
+                    struct_name = get_tok_str(type_copy.ref->v & ~SYM_STRUCT, NULL);
+                }
+                if (!struct_name || (struct_name[0] == 'L' && struct_name[1] == '.')) {
+                    is_anonymous = 1;
+                }
+            }
+
+            /* Only output type field for non-anonymous types */
+            if (!is_anonymous) {
+                buf_puts(w, ", \"type\": \"");
+                json_write_base_type_name(w, s1, &type_copy, 1, is_scalar);
+                buf_puts(w, "\"");
+            }
+
+            buf_puts(w, ", \"kind\": \"");
+            if (is_pointer) {
+                buf_puts(w, "pointer");
+            } else if (is_array) {
+                buf_puts(w, "array");
+            } else if (is_struct_or_union) {
+                if (is_anonymous) {
+                    /* Anonymous struct/union gets special kind */
+                    if (type_copy.t & (1 << VT_STRUCT_SHIFT))
+                        buf_puts(w, "anon_union");
+                    else
+                        buf_puts(w, "anon_struct");
+                } else {
+                    /* Named struct/union */
+                    if (type_copy.t & (1 << VT_STRUCT_SHIFT))
+                        buf_puts(w, "union");
+                    else
+                        buf_puts(w, "struct");
+                }
+            } else {
+                buf_puts(w, "scalar");
+            }
+            buf_puts(w, "\"");
+
+            if (is_scalar && (type_copy.t & VT_UNSIGNED)) {
+                buf_puts(w, ", \"unsigned\": true");
+            }
+
+            if (is_array && array_size >= 0) {
+                buf_puts(w, ", \"element_count\": ");
+                buf_printf(w, "%d", array_size);
+            }
+
+            buf_puts(w, ", \"offset\": ");
+            buf_printf(w, "%d", m->c);
+
+            {
+                int align = 0;
+                int size = type_size(&m->type, &align);
+                buf_puts(w, ", \"size\": ");
+                buf_printf(w, "%d", size);
+            }
+
+            if (m->type.t & VT_BITFIELD) {
+                int bit_pos = BIT_POS(m->type.t);
+                int bit_size = BIT_SIZE(m->type.t);
+                buf_puts(w, ", \"bitfield\": {\"pos\": ");
+                buf_printf(w, "%d", bit_pos);
+                buf_puts(w, ", \"size\": ");
+                buf_printf(w, "%d", bit_size);
+                buf_puts(w, "}");
+            }
+
+            /* For anonymous structs/unions, inline their members */
+            if (is_anonymous) {
+                buf_puts(w, ", \"members\": [\n");
+                json_write_struct_members(w, s1, type_copy.ref, indent + 1);
+                buf_puts(w, "\n");
+                {
+                    int i;
+                    for (i = 0; i < indent; i++) buf_puts(w, "  ");
+                }
+                buf_puts(w, "]");
+            }
+        }
+
+        buf_puts(w, "}");
+
+        m = m->next;
+    }
+}
+
+static void json_write_struct(BufWriter *w, TCCState *s1, Sym *s, const char *name, int *first)
+{
+    if (w->full) return;  /* Stop if buffer is already full */
+
+    if (!s || (s->type.t & VT_BTYPE) != VT_STRUCT)
+        return;
+
+    if (!*first)
+        buf_puts(w, ",\n");
+    *first = 0;
+
+    buf_puts(w, "  {");
+
+    buf_puts(w, "\"name\": \"");
+    if (name) {
+        buf_puts(w, name);
+    } else {
+        buf_puts(w, "<anonymous>");
+    }
+    buf_putc(w, '"');
+
+    buf_puts(w, ", \"kind\": \"");
+    /* VT_UNION is (1 << VT_STRUCT_SHIFT | VT_STRUCT), check bit 20 */
+    if (s->type.t & (1 << VT_STRUCT_SHIFT))
+        buf_puts(w, "union");
+    else
+        buf_puts(w, "struct");
+    buf_puts(w, "\"");
+
+    {
+        int align = 0;
+        int size = 0;
+        if (s->type.ref && s->type.ref->r != 0) {
+            size = type_size(&s->type, &align);
+        } else {
+            size = s->c;
+            align = s->r;
+        }
+        buf_puts(w, ", \"size\": ");
+        buf_printf(w, "%d", size);
+
+        buf_puts(w, ", \"align\": ");
+        buf_printf(w, "%d", align);
+    }
+
+    buf_puts(w, ", \"members\": [\n");
+    json_write_struct_members(w, s1, s, 2);
+    buf_puts(w, "\n  ]");
+
+    buf_puts(w, "}");
+}
+
+static void json_write_debug_calls(BufWriter *w, TCCState *s1)
+{
+    if (w->full) return;
+    if (!s1->debug_calls || s1->nb_debug_calls == 0) {
+        buf_puts(w, "[]");
+        return;
+    }
+
+    buf_puts(w, "[\n");
+
+    {
+        int i;
+        for (i = 0; i < s1->nb_debug_calls; i++) {
+            DebugCallRecord *rec;
+            if (w->full) break;
+
+            rec = &s1->debug_calls[i];
+
+            if (i > 0) buf_puts(w, ",\n");
+            buf_puts(w, "  {\n");
+
+            switch (rec->func_type) {
+                case DEBUG_FUNC_STRUCT:
+                    buf_puts(w, "    \"type_constant\": ");
+                    buf_printf(w, "%d,\n", DEBUG_FUNC_STRUCT);
+                    buf_puts(w, "    \"label\": \"");
+                    buf_puts(w, rec->args.debug_struct.label ? rec->args.debug_struct.label : "");
+                    buf_puts(w, "\",\n");
+                    buf_printf(w, "    \"counter\": %d,\n", rec->args.debug_struct.counter);
+                    buf_puts(w, "    \"type_name\": \"");
+                    buf_puts(w, rec->args.debug_struct.struct_name ? rec->args.debug_struct.struct_name : "");
+                    buf_puts(w, "\",\n");
+                    buf_printf(w, "    \"is_union\": %s\n",
+                              rec->args.debug_struct.is_union ? "true" : "false");
+                    break;
+                case DEBUG_FUNC_STR:
+                    buf_puts(w, "    \"type\": ");
+                    buf_printf(w, "%d,\n", 3);  /* type=3 for strings */
+                    buf_puts(w, "    \"label\": \"");
+                    buf_puts(w, rec->args.debug_str.label ? rec->args.debug_str.label : "");
+                    buf_puts(w, "\",\n");
+                    buf_printf(w, "    \"counter\": %d\n", rec->args.debug_str.counter);
+                    break;
+                case DEBUG_FUNC_NUM:
+                    buf_puts(w, "    \"type\": ");
+                    buf_printf(w, "%d,\n", 2);  /* type=2 for numbers */
+                    buf_puts(w, "    \"label\": \"");
+                    buf_puts(w, rec->args.debug_num.label ? rec->args.debug_num.label : "");
+                    buf_puts(w, "\",\n");
+                    buf_printf(w, "    \"counter\": %d,\n", rec->args.debug_num.counter);
+                    buf_printf(w, "    \"is_signed\": %s\n",
+                              rec->args.debug_num.is_signed ? "true" : "false");
+                    break;
+                default:
+                    buf_printf(w, "    \"type_constant\": %d\n", rec->func_type);
+                    break;
+            }
+
+            buf_puts(w, "  }");
+        }
+    }
+
+    buf_puts(w, "\n]");
+}
+
 
 PUB_FUNC void tcc_print_stats(TCCState *s1, unsigned total_time)
 {

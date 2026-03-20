@@ -21,16 +21,22 @@ static const char program[] =
 "   return 0;\n"
 "}\n";
 
-void handle_error(void *opaque, const char *msg)
+void handle_error(void *opaque, const TCCErrorInfo *info)
 {
-    fprintf(opaque, "%s\n", msg);
+    if (info->filename) {
+        if (info->line_num)
+            fprintf(opaque, "%s:%d: ", info->filename, info->line_num);
+        else
+            fprintf(opaque, "%s: ", info->filename);
+    }
+    fprintf(opaque, "%s: %s\n", info->is_warning ? "warning" : "error", info->msg);
 }
 
 int
 main(void)
 {
     int (*func)(void);
-    TCCState *s = tcc_new();
+    TCCState *s = tcc_new(0);
 
     if (!s) {
         fprintf(stderr, __FILE__ ": could not create tcc state\n");

@@ -42,7 +42,7 @@ static int run_callback(const char *src, callback_type callback) {
   int result;
   void *ptr;
   
-  s = tcc_new();
+  s = tcc_new(0);
   if (!s)
     return -1;
 

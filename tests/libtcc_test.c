@@ -8,9 +8,15 @@
 #include <string.h>
 #include "libtcc.h"
 
-void handle_error(void *opaque, const char *msg)
+void handle_error(void *opaque, const TCCErrorInfo *info)
 {
-    fprintf(opaque, "%s\n", msg);
+    if (info->filename) {
+        if (info->line_num)
+            fprintf(opaque, "%s:%d: ", info->filename, info->line_num);
+        else
+            fprintf(opaque, "%s: ", info->filename);
+    }
+    fprintf(opaque, "%s: %s\n", info->is_warning ? "warning" : "error", info->msg);
 }
 
 /* this function is called by the generated code */
@@ -51,7 +57,7 @@ int main(int argc, char **argv)
     int i;
     int (*func)(int);
 
-    s = tcc_new();
+    s = tcc_new(0);
     if (!s) {
         fprintf(stderr, "Could not create tcc state\n");
         exit(1);
