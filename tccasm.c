@@ -958,7 +958,7 @@ static void asm_parse_directive(TCCState *s1, int global)
         next();
         break;
 #endif
-#ifdef TCC_TARGET_RISCV64
+#if defined TCC_TARGET_RISCV64 || defined TCC_TARGET_RISCV32
     case TOK_ASMDIR_option:
         next();
         switch(tok){
@@ -1100,7 +1100,7 @@ static void tcc_assemble_inline(TCCState *s1, const char *str, int len, int glob
 {
     const int *saved_macro_ptr = macro_ptr;
     int dotid = set_idnum('.', IS_ID);
-#ifndef TCC_TARGET_RISCV64
+#if !defined TCC_TARGET_RISCV64 && !defined TCC_TARGET_RISCV32
     int dolid = set_idnum('$', 0);
 #endif
 
@@ -1110,7 +1110,7 @@ static void tcc_assemble_inline(TCCState *s1, const char *str, int len, int glob
     tcc_assemble_internal(s1, 0, global);
     tcc_close();
 
-#ifndef TCC_TARGET_RISCV64
+#if !defined TCC_TARGET_RISCV64 && !defined TCC_TARGET_RISCV32
     set_idnum('$', dolid);
 #endif
     set_idnum('.', dotid);
@@ -1176,7 +1176,7 @@ static void subst_asm_operands(ASMOperand *operands, int nb_operands,
             if (*str == 'c' || *str == 'n' ||
                 *str == 'b' || *str == 'w' || *str == 'h' || *str == 'k' ||
 		*str == 'q' || *str == 'l' ||
-#ifdef TCC_TARGET_RISCV64
+#if defined TCC_TARGET_RISCV64 || defined TCC_TARGET_RISCV32
 		*str == 'z' ||
 #endif
 		/* P in GCC would add "@PLT" to symbol refs in PIC mode,

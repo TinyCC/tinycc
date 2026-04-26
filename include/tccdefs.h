@@ -275,7 +275,7 @@
     } __builtin_va_list;
 
 #endif
-#elif defined __riscv
+#elif defined __riscv || defined TCC_TARGET_RISCV32
     typedef char *__builtin_va_list;
     #define __va_reg_size (__riscv_xlen >> 3)
     #define _tcc_align(addr,type) (((unsigned long)addr + __alignof__(type) - 1) \

@@ -148,12 +148,14 @@ extern long double strtold (const char *__nptr, char **__endptr);
 /* #define TCC_TARGET_ARM    *//* ARMv4 code generator */
 /* #define TCC_TARGET_ARM64  *//* ARMv8 code generator */
 /* #define TCC_TARGET_C67    *//* TMS320C67xx code generator */
-/* #define TCC_TARGET_RISCV64 *//* risc-v code generator */
+/* #define TCC_TARGET_RISCV64 *//* risc-v 64 code generator */
+/* #define TCC_TARGET_RISCV32 *//* risc-v 32 code generator */
 
 /* default target is I386 */
 #if !defined(TCC_TARGET_I386) && !defined(TCC_TARGET_ARM) && \
     !defined(TCC_TARGET_ARM64) && !defined(TCC_TARGET_C67) && \
-    !defined(TCC_TARGET_X86_64) && !defined(TCC_TARGET_RISCV64)
+    !defined(TCC_TARGET_X86_64) && !defined(TCC_TARGET_RISCV64) && \
+    !defined(TCC_TARGET_RISCV32)
 # if defined __x86_64__
 #  define TCC_TARGET_X86_64
 # elif defined __arm__
@@ -163,8 +165,10 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #  define TCC_ARM_HARDFLOAT
 # elif defined __aarch64__
 #  define TCC_TARGET_ARM64
-# elif defined __riscv
+# elif defined __riscv && defined __LP64__
 #  define TCC_TARGET_RISCV64
+# elif defined __riscv && !defined __LP64__
+#  define TCC_TARGET_RISCV32
 # else
 #  define TCC_TARGET_I386
 # endif
@@ -188,6 +192,8 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # elif defined __aarch64__ && defined TCC_TARGET_ARM64
 #  define TCC_IS_NATIVE
 # elif defined __riscv && defined __LP64__ && defined TCC_TARGET_RISCV64
+#  define TCC_IS_NATIVE
+# elif defined __riscv && !defined __LP64__ && defined TCC_TARGET_RISCV32
 #  define TCC_IS_NATIVE
 # endif
 #endif
@@ -229,7 +235,8 @@ extern long double strtold (const char *__nptr, char **__endptr);
    cross-compilers made by a mingw-GCC */
 #if defined TCC_TARGET_PE \
     || (defined TCC_TARGET_MACHO && defined TCC_TARGET_ARM64) \
-    || (defined _WIN32 && !defined __GNUC__)
+    || (defined _WIN32 && !defined __GNUC__) \
+    || defined TCC_TARGET_RISCV32
 # define TCC_USING_DOUBLE_FOR_LDOUBLE 1
 #endif
 
@@ -309,6 +316,8 @@ extern long double strtold (const char *__nptr, char **__endptr);
 #  define CONFIG_TCC_ELFINTERP "/lib64/ld-linux-x86-64.so.2"
 # elif defined(TCC_TARGET_RISCV64)
 #  define CONFIG_TCC_ELFINTERP "/lib/ld-linux-riscv64-lp64d.so.1"
+# elif defined(TCC_TARGET_RISCV32)
+#  define CONFIG_TCC_ELFINTERP "/lib/ld-linux-riscv32-ilp32.so.1"
 # elif defined(TCC_ARM_EABI)
 #  define DEFAULT_ELFINTERP(s) default_elfinterp(s)
 # else
@@ -395,6 +404,10 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # include "riscv64-gen.c"
 # include "riscv64-link.c"
 # include "riscv64-asm.c"
+#elif defined(TCC_TARGET_RISCV32)
+# include "riscv32-gen.c"
+# include "riscv32-link.c"
+# include "riscv32-asm.c"
 #else
 #error unknown target
 #endif
@@ -406,6 +419,14 @@ extern long double strtold (const char *__nptr, char **__endptr);
 # define ELFCLASSW ELFCLASS64
 # define ElfW(type) Elf##64##_##type
 # define ELFW(type) ELF##64##_##type
+# define ElfW_Rel ElfW(Rela)
+# define SHT_RELX SHT_RELA
+# define REL_SECTION_FMT ".rela%s"
+#elif defined TCC_TARGET_RISCV32
+/* RISC-V always uses RELA relocations, even for RV32 */
+# define ELFCLASSW ELFCLASS32
+# define ElfW(type) Elf##32##_##type
+# define ELFW(type) ELF##32##_##type
 # define ElfW_Rel ElfW(Rela)
 # define SHT_RELX SHT_RELA
 # define REL_SECTION_FMT ".rela%s"
@@ -803,6 +824,9 @@ struct TCCState {
 #ifdef TCC_TARGET_ARM
     unsigned char float_abi; /* float ABI of the generated code*/
 #endif
+#ifdef TCC_TARGET_RISCV32
+    unsigned char fpu; /* if true, emit inline F/D instructions (-mfpu) */
+#endif
 
     unsigned char has_text_addr;
     addr_t text_addr; /* address of text section */
@@ -937,7 +961,7 @@ struct TCCState {
     ElfW_Rel *qrel;
     #define qrel s1->qrel
 
-#ifdef TCC_TARGET_RISCV64
+#if defined TCC_TARGET_RISCV64 || defined TCC_TARGET_RISCV32
     struct pcrel_hi { addr_t addr, val; } last_hi;
     struct pcrel_hi *pcrel_hi_entries;
     int nb_pcrel_hi_entries;
@@ -1722,6 +1746,13 @@ ST_FUNC void gen_opl(int op);
 ST_FUNC void gen_va_start(void);
 ST_FUNC void arch_transfer_ret_regs(int);
 ST_FUNC void gen_cvt_sxtw(void);
+ST_FUNC void gen_increment_tcov (SValue *sv);
+#endif
+
+/* ------------ riscv32-gen.c ------------ */
+#ifdef TCC_TARGET_RISCV32
+ST_FUNC void gen_va_start(void);
+ST_FUNC void arch_transfer_ret_regs(int);
 ST_FUNC void gen_increment_tcov (SValue *sv);
 #endif
 

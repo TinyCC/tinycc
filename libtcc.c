@@ -53,6 +53,10 @@
 #include "riscv64-gen.c"
 #include "riscv64-link.c"
 #include "riscv64-asm.c"
+#elif defined(TCC_TARGET_RISCV32)
+#include "riscv32-gen.c"
+#include "riscv32-link.c"
+#include "riscv32-asm.c"
 #else
 #error unknown target
 #endif
@@ -1732,6 +1736,9 @@ static const FlagDef options_m[] = {
 #ifdef TCC_TARGET_X86_64
     { offsetof(TCCState, nosse), FD_INVERT, "sse" },
 #endif
+#ifdef TCC_TARGET_RISCV32
+    { offsetof(TCCState, fpu), 0, "fpu" },
+#endif
     { 0, 0, NULL }
 };
 
@@ -1783,6 +1790,8 @@ static const char dumpmachine_str[] =
     "aarch64"
 #elif defined TCC_TARGET_RISCV64
     "riscv64"
+#elif defined TCC_TARGET_RISCV32
+    "riscv32"
 #endif
     "-"
 #ifdef TCC_TARGET_PE
