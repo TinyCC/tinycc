@@ -735,6 +735,44 @@ struct sym_attr {
 #endif
 };
 
+/* Debug function call types */
+#define DEBUG_FUNC_STRUCT    1
+#define DEBUG_FUNC_U32       2
+#define DEBUG_FUNC_U64       3
+#define DEBUG_FUNC_STR       4
+#define DEBUG_FUNC_NUM       5
+
+/* Record of a debug function call */
+typedef struct DebugCallRecord {
+    int func_type;           /* DEBUG_FUNC_STRUCT, etc. */
+
+    union {
+        struct {
+            const char *label;       /* Arg 0: label string */
+            int counter;             /* Arg 1: __COUNTER__ value */
+            const char *struct_name; /* Arg 2: struct name from pointer */
+            int is_union;            /* Union vs struct flag */
+        } debug_struct;
+
+        struct {
+            const char *label;
+            int counter;
+            uint32_t value;
+        } debug_u32;
+
+        struct {
+            const char *label;
+            int counter;
+        } debug_str;
+
+        struct {
+            const char *label;
+            int counter;
+            int is_signed;
+        } debug_num;
+    } args;
+} DebugCallRecord;
+
 struct TCCState {
     unsigned char verbose; /* if true, display some information during compilation */
     unsigned char nostdinc; /* if true, no standard headers are added */
@@ -756,6 +794,7 @@ struct TCCState {
     unsigned char leading_underscore;
     unsigned char ms_extensions; /* allow nested named struct w/o identifier behave like unnamed */
     unsigned char dollars_in_identifiers;  /* allows '$' char in identifiers */
+    unsigned char syntax_only; /* if true, only check syntax without code generation */
     unsigned char ms_bitfields; /* if true, emulate MS algorithm for aligning bitfields */
     unsigned char reverse_funcargs; /* if true, evaluate last function arg first */
     unsigned char gnu89_inline; /* treat 'extern inline' like 'static inline' */
@@ -853,7 +892,7 @@ struct TCCState {
 
     /* error handling */
     void *error_opaque;
-    void (*error_func)(void *opaque, const char *msg);
+    void (*error_func)(void *opaque, const TCCErrorInfo *info);
     int error_set_jmp_enabled;
     jmp_buf error_jmp_buf;
     int nb_errors;
@@ -933,6 +972,12 @@ struct TCCState {
     /* extra attributes (eg. GOT/PLT value) for symtab symbols */
     struct sym_attr *sym_attrs;
     int nb_sym_attrs;
+
+    /* Debug function call tracking */
+    DebugCallRecord *debug_calls;
+    int nb_debug_calls;
+    int debug_calls_capacity;
+
     /* ptr to next reloc entry reused */
     ElfW_Rel *qrel;
     #define qrel s1->qrel
@@ -1218,6 +1263,10 @@ ST_FUNC char *pstrcat(char *buf, size_t buf_size, const char *s);
 ST_FUNC char *pstrncpy(char *out, size_t buf_size, const char *s, size_t num);
 PUB_FUNC char *tcc_basename(const char *name);
 PUB_FUNC char *tcc_fileextension (const char *name);
+
+PUB_FUNC void tcc_arena_init(unsigned int arena_size);
+PUB_FUNC void tcc_arena_free(void);
+PUB_FUNC size_t tcc_arena_watermark(void);
 
 /* all allocations - even MEM_DEBUG - use these */
 PUB_FUNC void tcc_free(void *ptr);
