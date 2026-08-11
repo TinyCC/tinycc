@@ -1876,7 +1876,7 @@ dwarf_read_uleb128(unsigned char **ln, unsigned char *end)
 {
     unsigned char *cp = *ln;
     uint64_t retval = 0;
-    int i;
+    unsigned i;
     for (i = 0; i < DWARF_MAX_128; i++) {
 	uint64_t byte = dwarf_read_1(cp, end);
         retval |= (byte & 0x7f) << (i * 7);
@@ -1891,7 +1891,7 @@ dwarf_read_sleb128(unsigned char **ln, unsigned char *end)
 {
     unsigned char *cp = *ln;
     int64_t retval = 0;
-    int i;
+    unsigned i;
     for (i = 0; i < DWARF_MAX_128; i++) {
 	uint64_t byte = dwarf_read_1(cp, end);
         retval |= (byte & 0x7f) << (i * 7);
