@@ -2401,6 +2401,7 @@ static int layout_sections(TCCState *s1, int *sec_order, struct dyn_inf *d)
     ElfW(Phdr) *ph = NULL, *ph2;
     int i, f, n, phnum, phfill;
     int file_offset;
+    int gnustack; /* index of PT_GNU_STACK header, if any */
 
     /* compute number of program headers */
     phnum = sort_sections(s1, sec_order, d);
@@ -2418,6 +2419,11 @@ static int layout_sections(TCCState *s1, int *sec_order, struct dyn_inf *d)
         d->ehfr = phnum++;
     if (d->relro)
         d->relro = phnum++;
+    /* PT_GNU_STACK: tells the loader/kernel the stack should be
+       non-executable. Only meaningful for ELF output. */
+    gnustack = 0;
+    if (s1->output_format == TCC_OUTPUT_FORMAT_ELF)
+        gnustack = phnum++;
     d->phnum = phnum;
     d->phdr = tcc_mallocz(phnum * sizeof(ElfW(Phdr)));
 
@@ -2534,6 +2540,15 @@ static int layout_sections(TCCState *s1, int *sec_order, struct dyn_inf *d)
         fill_phdr(&d->phdr[d->dyna], PT_DYNAMIC, d->dynamic);
     if (d->ehfr)
         fill_phdr(&d->phdr[d->ehfr], PT_GNU_EH_FRAME, eh_frame_hdr_section);
+    if (gnustack) {
+        /* No associated section: zero-size, address-less segment that
+           just tells the loader/kernel the stack must not be
+           executable. */
+        ph = &d->phdr[gnustack];
+        fill_phdr(ph, PT_GNU_STACK, NULL);
+        ph->p_flags = PF_R | PF_W;
+        ph->p_align = 16;
+    }
     if (d->interp)
         fill_phdr(&d->phdr[1], PT_INTERP, d->interp);
     if (phfill) {
