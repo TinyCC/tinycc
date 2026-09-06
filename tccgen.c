@@ -2893,6 +2893,8 @@ static int compare_types(CType *type1, CType *type2, int unqualified)
     if (bt1 == VT_PTR) {
         type1 = pointed_type(type1);
         type2 = pointed_type(type2);
+        if (unqualified && (t1 & VT_ARRAY))
+            return compare_types(type1, type2, 1);
         return is_compatible_types(type1, type2);
     } else if (bt1 == VT_STRUCT) {
         return (type1->ref == type2->ref);
@@ -5815,9 +5817,7 @@ ST_FUNC void unary(void)
         break;
     case TOK_builtin_types_compatible_p:
 	parse_builtin_params(0, "tt");
-	vtop[-1].type.t &= ~(VT_CONSTANT | VT_VOLATILE);
-	vtop[0].type.t &= ~(VT_CONSTANT | VT_VOLATILE);
-	n = is_compatible_types(&vtop[-1].type, &vtop[0].type);
+	n = compare_types(&vtop[-1].type, &vtop[0].type, 1);
 	vtop -= 2;
 	vpushi(n);
         break;

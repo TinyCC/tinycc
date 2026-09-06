@@ -3953,6 +3953,9 @@ void builtin_test(void)
     COMPAT_TYPE(int, char);
     COMPAT_TYPE(int, const int);
     COMPAT_TYPE(int, volatile int);
+    COMPAT_TYPE(int[2], const int[2]);
+    COMPAT_TYPE(int[2][3], volatile int[][3]);
+    COMPAT_TYPE(int (*)[], const int (*)[]);
     COMPAT_TYPE(int *, int *);
     COMPAT_TYPE(int *, void *);
     COMPAT_TYPE(int *, const int *);
