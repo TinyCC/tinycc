@@ -661,4 +661,22 @@ void good_volatile_write(volatile my_struct *s)
     s->arr[0] = 1;
 }
 
+#elif defined test_conditional_array_qualifiers
+
+typedef int Array2[2];
+typedef int Array2x3[2][3];
+
+Array2 *p;
+const Array2 *cp;
+const Array2x3 *cap;
+volatile Array2x3 *vap;
+
+void test(void)
+{
+    (1 ? p : cp)[0][0] = 1;
+    (1 ? cp : p)[0][0] = 2;
+    (1 ? cap : vap)[0][0][0] = 3;
+    (1 ? vap : cap)[0][0][0] = 4;
+}
+
 #endif

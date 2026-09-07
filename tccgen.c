@@ -136,6 +136,8 @@ static void block(int flags);
 static void gen_cast(CType *type);
 static void gen_cast_s(int t);
 static inline CType *pointed_type(CType *type);
+static int type_qualifiers(CType *type);
+static void parse_btype_qualify(CType *type, int qualifiers);
 static int is_compatible_types(CType *type1, CType *type2);
 static int parse_btype(CType *type, AttributeDef *ad, int ignore_label);
 static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td);
@@ -2972,15 +2974,14 @@ static int combine_types(CType *dest, SValue *op1, SValue *op2, int op)
                    pointed to types minus qualifs should be compatible */
                 type = *((pbt1 == VT_VOID) ? type1 : type2);
                 /* combine qualifs */
-                newquals = ((pt1->t | pt2->t) & (VT_CONSTANT | VT_VOLATILE));
-                if ((~pointed_type(&type)->t & (VT_CONSTANT | VT_VOLATILE))
-                    & newquals)
+                newquals = type_qualifiers(pt1) | type_qualifiers(pt2);
+                if ((~type_qualifiers(pointed_type(&type))) & newquals)
                   {
                     /* copy the pointer target symbol */
                     type.ref = sym_push(SYM_FIELD, &type.ref->type,
                                         0, type.ref->c);
                     copied = 1;
-                    pointed_type(&type)->t |= newquals;
+                    parse_btype_qualify(pointed_type(&type), newquals);
                   }
                 /* pointers to incomplete arrays get converted to
                    pointers to completed ones if possible */
@@ -3565,6 +3566,14 @@ static void vpush_type_size(CType *type, int *a)
 static inline CType *pointed_type(CType *type)
 {
     return &type->ref->type;
+}
+
+/* Array qualifiers are represented on the element type. */
+static int type_qualifiers(CType *type)
+{
+    while (type->t & VT_ARRAY)
+        type = pointed_type(type);
+    return type->t & (VT_CONSTANT | VT_VOLATILE);
 }
 
 /* modify type so that its it is a pointer to type. */

@@ -290,3 +290,9 @@ bar 15 12 34
 60_errors_and_warnings.c:651: warning: assignment discards qualifiers from pointer target type
 
 [test_volatile_array_member_write_ok]
+
+[test_conditional_array_qualifiers]
+60_errors_and_warnings.c:676: warning: assignment of read-only location
+60_errors_and_warnings.c:677: warning: assignment of read-only location
+60_errors_and_warnings.c:678: warning: assignment of read-only location
+60_errors_and_warnings.c:679: warning: assignment of read-only location
