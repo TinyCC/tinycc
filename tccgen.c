@@ -137,6 +137,9 @@ static void gen_cast(CType *type);
 static void gen_cast_s(int t);
 static inline CType *pointed_type(CType *type);
 static void check_restrict_type(CType *type);
+static void unqualify_optional(CType *type);
+static void unqualify_optional_target(CType *type);
+static int is_optional_type(CType *type);
 static int type_qualifiers(CType *type);
 static void parse_btype_qualify(CType *type, int qualifiers);
 static int is_compatible_types(CType *type1, CType *type2);
@@ -2680,6 +2683,8 @@ static void type_to_str(char *buf, int buf_size,
     if (bt != VT_PTR) {
         if (t & VT_RESTRICT)
             pstrcat(buf, buf_size, "restrict ");
+        if (t & VT_OPTIONAL)
+            pstrcat(buf, buf_size, "_Optional ");
         if (t & VT_VOLATILE)
             pstrcat(buf, buf_size, "volatile ");
         if (t & VT_CONSTANT)
@@ -2784,6 +2789,8 @@ static void type_to_str(char *buf, int buf_size,
             pstrcat(buf1, sizeof(buf1), "const ");
         if (t & VT_VOLATILE)
             pstrcat(buf1, sizeof(buf1), "volatile ");
+        if (t & VT_OPTIONAL)
+            pstrcat(buf1, sizeof(buf1), "_Optional ");
         if (varstr)
             pstrcat(buf1, sizeof(buf1), varstr);
         type_to_str(buf, buf_size, &s->type, buf1);
@@ -3067,11 +3074,13 @@ redo:
     if (bt1 == VT_FUNC || bt2 == VT_FUNC) {
 	if (bt2 == VT_FUNC) {
 	    mk_pointer(&vtop->type);
+	    unqualify_optional_target(&vtop->type);
 	    gaddrof();
 	}
 	if (bt1 == VT_FUNC) {
 	    vswap();
 	    mk_pointer(&vtop->type);
+	    unqualify_optional_target(&vtop->type);
 	    gaddrof();
 	    vswap();
 	}
@@ -3131,6 +3140,7 @@ op_err:
                 gen_opic(op);
             }
             type1.t &= ~(VT_ARRAY|VT_VLA);
+            unqualify_optional_target(&type1);
             /* put again type if gen_opic() swaped operands */
             vtop->type = type1;
         }
@@ -3587,6 +3597,35 @@ static void check_restrict_type(CType *type)
         tcc_error("restrict-qualified type must be a pointer to object or incomplete type");
 }
 
+/* Remove _Optional from TYPE.  Array qualification is represented on the
+   element type, so copy each shared array node before changing it. */
+static void unqualify_optional(CType *type)
+{
+    if (!is_optional_type(type))
+        return;
+    while (type->t & VT_ARRAY) {
+        type->ref = sym_push(SYM_FIELD, &type->ref->type, 0, type->ref->c);
+        type = pointed_type(type);
+    }
+    type->t &= ~VT_OPTIONAL;
+}
+
+static void unqualify_optional_target(CType *type)
+{
+    if (!is_optional_type(pointed_type(type)))
+        return;
+    /* The target symbol may be shared with another type. */
+    type->ref = sym_push(SYM_FIELD, &type->ref->type, 0, type->ref->c);
+    unqualify_optional(pointed_type(type));
+}
+
+static int is_optional_type(CType *type)
+{
+    while (type->t & VT_ARRAY)
+        type = pointed_type(type);
+    return !!(type->t & VT_OPTIONAL);
+}
+
 /* Array qualifiers are represented on the element type. */
 static int type_qualifiers(CType *type)
 {
@@ -3627,7 +3666,7 @@ static void cast_error(CType *st, CType *dt)
 /* verify type compatibility to store vtop in 'dt' type */
 static void verify_assign_cast(CType *dt)
 {
-    CType *st, *type1, *type2;
+    CType *st, *type1, *type2, ct;
     int dbt, sbt, qualwarn, lvl;
 
     st = &vtop->type; /* source type */
@@ -3654,9 +3693,14 @@ static void verify_assign_cast(CType *dt)
         if (sbt == VT_PTR)
             type2 = pointed_type(st);
         else if (sbt == VT_FUNC)
-            type2 = st; /* a function is implicitly a function pointer */
+            type2 = st;
         else
             goto error;
+        if ((st->t & VT_ARRAY) || sbt == VT_FUNC) {
+            ct = *type2;
+            unqualify_optional(&ct);
+            type2 = &ct;
+        }
         if (is_compatible_types(type1, type2))
             break;
         for (qualwarn = lvl = 0;; ++lvl) {
@@ -4647,6 +4691,9 @@ do_decl:
 				}
                     	    }
                         }
+                        if (is_optional_type(&type1))
+                            tcc_error("field '%s' has optional-qualified type",
+                                      get_tok_str(v, NULL));
                         if (type_size(&type1, &align) < 0) {
 			    if ((u == VT_STRUCT) && (type1.t & VT_ARRAY) && c)
 			        flexible = 1;
@@ -4885,6 +4932,12 @@ static int parse_btype(CType *type, AttributeDef *ad, int ignore_label)
                 goto basic_type2;
             }
             break;
+        case TOK_OPTIONAL:
+            type->t = t;
+            parse_btype_qualify(type, VT_OPTIONAL);
+            t = type->t;
+            next();
+            break;
         case TOK_CONST1:
         case TOK_CONST2:
         case TOK_CONST3:
@@ -5047,8 +5100,12 @@ static inline void convert_parameter_type(CType *pt)
 /* apply the conversions required for an expression value */
 static inline void convert_expression_type(CType *pt)
 {
+    int converts = (pt->t & VT_BTYPE) == VT_FUNC || (pt->t & VT_ARRAY);
+
     pt->t &= ~VT_QUAL;
     convert_parameter_type(pt);
+    if (converts)
+        unqualify_optional_target(pt);
 }
 
 ST_FUNC CString* parse_asm_str(void)
@@ -5129,6 +5186,9 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
                 if (n < TOK_UIDENT)
                     expect("identifier");
                 convert_parameter_type(&pt);
+                if (is_optional_type(&pt))
+                    tcc_error("parameter '%s' has optional-qualified type",
+                              get_tok_str(n & ~SYM_FIELD, NULL));
                 arg_size += (type_size(&pt, &align) + PTR_SIZE - 1) / PTR_SIZE;
                 /* these symbols may be evaluated for VLArrays (see below, under
                    nocode_wanted) Example: int func(int a, int b[++a]); */
@@ -5185,6 +5245,10 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
 	       in parameter decls.  The '*' as well, and then even only
 	       in prototypes (not function defs).  */
 	    switch (tok) {
+	    case TOK_OPTIONAL:
+		array_qualifiers |= VT_OPTIONAL;
+		next();
+		continue;
 	    case TOK_CONST1: case TOK_CONST2: case TOK_CONST3:
 		array_qualifiers |= VT_CONSTANT;
 		next();
@@ -5318,6 +5382,9 @@ static CType *type_decl(CType *type, AttributeDef *ad, int *v, int td)
         switch(tok) {
         case TOK__Atomic:
             qualifiers |= VT_ATOMIC;
+            goto redo;
+        case TOK_OPTIONAL:
+            qualifiers |= VT_OPTIONAL;
             goto redo;
         case TOK_CONST1:
         case TOK_CONST2:
@@ -5754,7 +5821,9 @@ ST_FUNC void unary(void)
             skip(')');
             /* check ISOC99 compound literal */
             if (tok == '{') {
-                    /* data is allocated locally by default */
+                if (is_optional_type(&type))
+                    tcc_error("compound literal has optional-qualified type");
+                /* data is allocated locally by default */
                 if (global_expr)
                     r = VT_CONST;
                 else
@@ -5817,6 +5886,7 @@ ST_FUNC void unary(void)
             test_lvalue();
         if (vtop->sym)
           vtop->sym->a.addrtaken = 1;
+        unqualify_optional(&vtop->type);
         mk_pointer(&vtop->type);
         gaddrof();
         break;
@@ -8882,6 +8952,9 @@ static int decl(int l)
             type = btype;
 	    ad = adbase;
             type_decl(&type, &ad, &v, l == VT_CMP ? TYPE_DIRECT | TYPE_PARAM : TYPE_DIRECT);
+            if (!(type.t & VT_TYPEDEF) && is_optional_type(&type))
+                tcc_error("'%s' has optional-qualified type",
+                          get_tok_str(v, NULL));
             /*ptype("decl", &type, v);*/
             if ((type.t & VT_BTYPE) == VT_FUNC) {
                 if ((type.t & VT_STATIC) && (l != VT_CONST))

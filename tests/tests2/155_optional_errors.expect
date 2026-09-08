@@ -1,0 +1,140 @@
+[test_optional_keyword_identifier]
+155_optional_errors.c:2: error: identifier expected
+
+[test_optional_obj]
+155_optional_errors.c:5: error: 'oi' has optional-qualified type
+
+[test_optional_pointer_obj]
+155_optional_errors.c:8: error: 'opi' has optional-qualified type
+
+[test_obj_with_optional_array_type]
+155_optional_errors.c:11: error: 'aaoi' has optional-qualified type
+
+[test_obj_with_array_of_optional_type_via_typedef]
+155_optional_errors.c:15: error: 'aaoi' has optional-qualified type
+
+[test_obj_with_optional_array_type_via_typedef]
+155_optional_errors.c:20: error: 'oaai' has optional-qualified type
+
+[test_member_with_optional_type]
+155_optional_errors.c:24: error: field 'oi' has optional-qualified type
+
+[test_member_with_optional_array_type]
+155_optional_errors.c:29: error: field 'aoi' has optional-qualified type
+
+[test_member_with_optional_type_via_typedef]
+155_optional_errors.c:35: error: field 'oi' has optional-qualified type
+
+[test_member_with_array_of_optional_type_via_typedef]
+155_optional_errors.c:41: error: field 'aoi' has optional-qualified type
+
+[test_union_member_with_optional_type]
+155_optional_errors.c:46: error: field 'oi' has optional-qualified type
+
+[test_optional_param]
+155_optional_errors.c:50: error: parameter 'oi' has optional-qualified type
+
+[test_optional_pointer_param]
+155_optional_errors.c:53: error: parameter 'opi' has optional-qualified type
+
+[test_optional_pointer_to_array_param]
+155_optional_errors.c:56: error: parameter 'opaai' has optional-qualified type
+
+[test_optional_param_via_typedef]
+155_optional_errors.c:60: error: parameter 'oi' has optional-qualified type
+
+[test_optional_compound_literal]
+155_optional_errors.c:65: error: compound literal has optional-qualified type
+
+[test_optional_pointer_compound_literal]
+155_optional_errors.c:71: error: compound literal has optional-qualified type
+
+[test_optional_qualifier_loss]
+155_optional_errors.c:77: warning: assignment discards qualifiers from pointer target type
+
+[test_optional_qualifier_loss_after_guard]
+155_optional_errors.c:86: warning: assignment discards qualifiers from pointer target type
+
+[test_optional_qualifier_loss_nested]
+155_optional_errors.c:93: warning: assignment discards qualifiers from pointer target type
+
+[test_optional_qualifier_loss_func]
+155_optional_errors.c:101: warning: assignment discards qualifiers from pointer target type
+
+[test_optional_qualifier_loss_after_postincrement]
+155_optional_errors.c:109: warning: assignment discards qualifiers from pointer target type
+
+[test_optional_qualifier_loss_after_postdec]
+155_optional_errors.c:116: warning: assignment discards qualifiers from pointer target type
+
+[test_optional_qualifier_loss_after_preinc]
+155_optional_errors.c:123: warning: assignment discards qualifiers from pointer target type
+
+[test_optional_qualifier_loss_after_predecrement]
+155_optional_errors.c:130: warning: assignment discards qualifiers from pointer target type
+
+[test_optional_qualifier_loss_after_add_assignment]
+155_optional_errors.c:137: warning: assignment discards qualifiers from pointer target type
+
+[test_optional_qualifier_loss_after_sub_assignment]
+155_optional_errors.c:145: warning: assignment discards qualifiers from pointer target type
+
+[test_optional_qualifier_loss_after_add_0_assignment]
+155_optional_errors.c:153: warning: assignment discards qualifiers from pointer target type
+
+[test_optional_qualifier_loss_after_sub_0_assignment]
+155_optional_errors.c:161: warning: assignment discards qualifiers from pointer target type
+
+[test_optional_obj_via_typedef]
+155_optional_errors.c:167: error: 'oi' has optional-qualified type
+
+[test_obj_with_optional_pointer_type_via_typedef]
+155_optional_errors.c:171: error: 'opi' has optional-qualified type
+
+[test_optional_func_via_typedef]
+155_optional_errors.c:176: error: 'ofri' has optional-qualified type
+
+[test_optional_func_declaration]
+155_optional_errors.c:179: error: 'ofri' has optional-qualified type
+
+[test_member_with_optional_type_in_typedef]
+155_optional_errors.c:183: error: field 'oi' has optional-qualified type
+
+[test_optional_param_in_typedef]
+155_optional_errors.c:187: error: parameter 'oi' has optional-qualified type
+
+[test_optional_array_param_qualifier]
+155_optional_errors.c:190: error: parameter 'opi' has optional-qualified type
+
+[test_optional_qualifier_loss_void_argument]
+155_optional_errors.c:197: warning: assignment discards qualifiers from pointer target type
+
+[test_optional_qualifier_loss_after_array_decay_argument]
+155_optional_errors.c:205: warning: assignment discards qualifiers from pointer target type
+
+[test_optional_param_type_mismatch]
+155_optional_errors.c:212: warning: assignment from incompatible pointer type
+
+[test_optional_return_type_mismatch]
+155_optional_errors.c:219: warning: assignment from incompatible pointer type
+
+[test_optional_qualifier_loss_after_array_decay_initialisation]
+155_optional_errors.c:227: warning: assignment discards qualifiers from pointer target type
+
+[test_optional_qualifier_loss_after_array_decay_assignment]
+155_optional_errors.c:236: warning: assignment discards qualifiers from pointer target type
+
+[test_optional_qualifier_loss_after_array_decay_return]
+155_optional_errors.c:244: warning: assignment discards qualifiers from pointer target type
+
+[test_optional_qualifier_loss_after_member_access]
+155_optional_errors.c:251: warning: assignment discards qualifiers from pointer target type
+
+[test_cv_qualifier_loss_after_optional_array_decay]
+155_optional_errors.c:257: warning: assignment discards qualifiers from pointer target type
+
+[test_cvr_qualifier_loss_after_optional_member_access]
+155_optional_errors.c:264: warning: assignment discards qualifiers from pointer target type
+
+[test_const_qualifier_loss_after_optional_arithmetic]
+155_optional_errors.c:271: warning: assignment discards qualifiers from pointer target type

@@ -20,6 +20,7 @@
      DEF(TOK_STATIC, "static")
      DEF(TOK_UNSIGNED, "unsigned")
      DEF(TOK__Atomic, "_Atomic")
+     DEF(TOK_OPTIONAL, "_Optional")
      DEF(TOK_CONST1, "const")
      DEF(TOK_CONST2, "__const") /* gcc keyword */
      DEF(TOK_CONST3, "__const__") /* gcc keyword */

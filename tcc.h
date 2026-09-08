@@ -1064,17 +1064,19 @@ struct filespec {
 #define VT_CONSTANT    0x0100  /* const modifier */
 #define VT_VOLATILE    0x0200  /* volatile modifier */
 #define VT_RESTRICT    0x0400  /* restrict modifier */
-#define VT_QUAL        (VT_CONSTANT | VT_VOLATILE | VT_RESTRICT)
-#define VT_VLA         0x0800  /* VLA type (also has VT_PTR and VT_ARRAY) */
-#define VT_LONG        0x1000  /* long type (also has VT_INT rsp. VT_LLONG) */
+#define VT_OPTIONAL    0x0800  /* _Optional qualifier */
+/* Keep qualifier bits together for A32 data-processing immediates. */
+#define VT_QUAL        (VT_CONSTANT | VT_VOLATILE | VT_RESTRICT | VT_OPTIONAL)
+#define VT_VLA         0x1000  /* VLA type (also has VT_PTR and VT_ARRAY) */
+#define VT_LONG        0x2000  /* long type (also has VT_INT rsp. VT_LLONG) */
 
 /* storage */
-#define VT_EXTERN  0x00002000  /* extern definition */
-#define VT_STATIC  0x00004000  /* static variable */
-#define VT_TYPEDEF 0x00008000  /* typedef definition */
-#define VT_INLINE  0x00010000  /* inline definition */
-#define VT_TLS     0x00020000  /* thread-local storage */
-/* currently unused: 0x000[48]0000  */
+#define VT_EXTERN  0x00004000  /* extern definition */
+#define VT_STATIC  0x00008000  /* static variable */
+#define VT_TYPEDEF 0x00010000  /* typedef definition */
+#define VT_INLINE  0x00020000  /* inline definition */
+#define VT_TLS     0x00040000  /* thread-local storage */
+/* currently unused: 0x00080000  */
 
 #define VT_STRUCT_SHIFT 20     /* shift for bitfield shift values (32 - 2*6) */
 #define VT_STRUCT_MASK (((1U << (6+6)) - 1) << VT_STRUCT_SHIFT | VT_BITFIELD)
