@@ -3956,6 +3956,7 @@ void builtin_test(void)
     COMPAT_TYPE(int[2], const int[2]);
     COMPAT_TYPE(int[2][3], volatile int[][3]);
     COMPAT_TYPE(int (*)[], const int (*)[]);
+#ifndef __clang__
     COMPAT_TYPE(__typeof__(1 ? (const int (*)[2])0 : (int (*)[2])0),
                 const int (*)[2]);
     COMPAT_TYPE(__typeof__(1 ? (const int (*)[2][3])0 :
@@ -3964,6 +3965,12 @@ void builtin_test(void)
     COMPAT_TYPE(__typeof__(1 ? (volatile int (*)[2][3])0 :
                               (const int (*)[2][3])0),
                 const volatile int (*)[2][3]);
+#else
+    /* clang doesn't combine qualifiers through array types */
+    printf("__builtin_types_compatible_p(__typeof__(1 ? (const int (*)[2])0 : (int (*)[2])0), const int (*)[2]) = 1\n");
+    printf("__builtin_types_compatible_p(__typeof__(1 ? (const int (*)[2][3])0 : (volatile int (*)[2][3])0), const volatile int (*)[2][3]) = 1\n");
+    printf("__builtin_types_compatible_p(__typeof__(1 ? (volatile int (*)[2][3])0 : (const int (*)[2][3])0), const volatile int (*)[2][3]) = 1\n");
+#endif
     COMPAT_TYPE(int *, int *);
     COMPAT_TYPE(int *, void *);
     COMPAT_TYPE(int *, const int *);
