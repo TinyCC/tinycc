@@ -3802,7 +3802,11 @@ static void pp_line(TCCState *s1, BufferedFile *f, int level)
 
     if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_NONE) {
         ;
-    } else if (level == 0 && f->line_ref && d < 8) {
+    } else if (level == 0 && f->line_ref && d >= 0 && d < 8) {
+	/* Negative d (e.g. #line resume after a large synthetic injection)
+	 * must not take the short-newline swallow path: while (d > 0) is a
+	 * no-op then, so the directive was silently dropped and line
+	 * tracking drifted. Restrict the swallow to non-negative deltas. */
 	while (d > 0)
 	    fputs("\n", s1->ppfp), --d;
     } else if (s1->Pflag == LINE_MACRO_OUTPUT_FORMAT_STD) {
