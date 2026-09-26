@@ -377,7 +377,7 @@ void load(int r, SValue *sv)
     SValue v1;
 
     fr = sv->r;
-    ft = sv->type.t & ~(VT_DEFSIGN|VT_VOLATILE|VT_CONSTANT);
+    ft = sv->type.t & ~(VT_DEFSIGN|VT_QUAL);
     fc = sv->c.i;
 
     if (fc != sv->c.i && (fr & VT_SYM))

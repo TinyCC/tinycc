@@ -1063,6 +1063,7 @@ struct filespec {
 #define VT_BITFIELD    0x0080  /* bitfield modifier */
 #define VT_CONSTANT    0x0100  /* const modifier */
 #define VT_VOLATILE    0x0200  /* volatile modifier */
+#define VT_QUAL        (VT_CONSTANT | VT_VOLATILE)
 #define VT_VLA         0x0400  /* VLA type (also has VT_PTR and VT_ARRAY) */
 #define VT_LONG        0x0800  /* long type (also has VT_INT rsp. VT_LLONG) */
 

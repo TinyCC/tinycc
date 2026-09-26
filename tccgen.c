@@ -2822,7 +2822,7 @@ static inline int is_null_pointer(SValue *p)
         ((p->type.t & VT_BTYPE) == VT_PTR &&
          (PTR_SIZE == 4 ? (uint32_t)p->c.i == 0 : p->c.i == 0) &&
          ((pointed_type(&p->type)->t & VT_BTYPE) == VT_VOID) &&
-         0 == (pointed_type(&p->type)->t & (VT_CONSTANT | VT_VOLATILE))
+         0 == (pointed_type(&p->type)->t & VT_QUAL)
          );
 }
 
@@ -2871,8 +2871,8 @@ static int compare_types(CType *type1, CType *type2, int unqualified)
     t2 = type2->t & VT_TYPE;
     if (unqualified) {
         /* strip qualifiers before comparing */
-        t1 &= ~(VT_CONSTANT | VT_VOLATILE);
-        t2 &= ~(VT_CONSTANT | VT_VOLATILE);
+        t1 &= ~VT_QUAL;
+        t2 &= ~VT_QUAL;
     }
 
     /* Default Vs explicit signedness only matters for char */
@@ -3490,7 +3490,7 @@ error:
     }
 done:
     vtop->type = *type;
-    vtop->type.t &= ~ ( VT_CONSTANT | VT_VOLATILE | VT_ARRAY | VT_TLS );
+    vtop->type.t &= ~ ( VT_QUAL | VT_ARRAY | VT_TLS );
 }
 
 /* return type size as known at compile time. Put alignment at 'a' */
@@ -3573,7 +3573,7 @@ static int type_qualifiers(CType *type)
 {
     while (type->t & VT_ARRAY)
         type = pointed_type(type);
-    return type->t & (VT_CONSTANT | VT_VOLATILE);
+    return type->t & VT_QUAL;
 }
 
 /* modify type so that its it is a pointer to type. */
@@ -3641,8 +3641,7 @@ static void verify_assign_cast(CType *dt)
         if (is_compatible_types(type1, type2))
             break;
         for (qualwarn = lvl = 0;; ++lvl) {
-            if (((type2->t & VT_CONSTANT) && !(type1->t & VT_CONSTANT)) ||
-                ((type2->t & VT_VOLATILE) && !(type1->t & VT_VOLATILE)))
+            if ((type2->t & ~type1->t) & VT_QUAL)
                 qualwarn = 1;
             dbt = type1->t & (VT_BTYPE|VT_LONG);
             sbt = type2->t & (VT_BTYPE|VT_LONG);
@@ -4969,7 +4968,7 @@ static int parse_btype(CType *type, AttributeDef *ad, int ignore_label)
             }
 
             t &= ~(VT_BTYPE|VT_LONG);
-            u = t & ~(VT_CONSTANT | VT_VOLATILE), t ^= u;
+            u = t & ~VT_QUAL, t ^= u;
             type->t = (s->type.t & ~VT_TYPEDEF) | u;
             type->ref = s->type.ref;
             if (t)
@@ -5016,7 +5015,7 @@ static inline void convert_parameter_type(CType *pt)
 /* apply the conversions required for an expression value */
 static inline void convert_expression_type(CType *pt)
 {
-    pt->t &= ~(VT_CONSTANT | VT_VOLATILE);
+    pt->t &= ~VT_QUAL;
     convert_parameter_type(pt);
 }
 
@@ -5121,7 +5120,7 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
         skip(')');
         /* A function return value has the unqualified version of its
            declared type. */
-        type->t &= ~(VT_CONSTANT | VT_VOLATILE);
+        type->t &= ~VT_QUAL;
         /* some ancient pre-K&R C allows a function to return an array
            and the array brackets to be put after the arguments, such 
            that "int c()[]" means something like "int[] c()" */
@@ -6197,7 +6196,7 @@ special_math_val:
             /* field */ 
             if (tok == TOK_ARROW) 
                 indir();
-            qualifiers = vtop->type.t & (VT_CONSTANT | VT_VOLATILE);
+            qualifiers = vtop->type.t & VT_QUAL;
             test_lvalue();
             /* expect pointer on structure */
             next();
