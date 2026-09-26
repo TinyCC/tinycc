@@ -5006,14 +5006,18 @@ the_end:
    function pointer) */
 static inline void convert_parameter_type(CType *pt)
 {
-    /* remove const and volatile qualifiers (XXX: const could be used
-       to indicate a const function parameter */
-    pt->t &= ~(VT_CONSTANT | VT_VOLATILE);
     /* array must be transformed to pointer according to ANSI C */
     pt->t &= ~(VT_ARRAY | VT_VLA);
     if ((pt->t & VT_BTYPE) == VT_FUNC) {
         mk_pointer(pt);
     }
+}
+
+/* apply the conversions required for an expression value */
+static inline void convert_expression_type(CType *pt)
+{
+    pt->t &= ~(VT_CONSTANT | VT_VOLATILE);
+    convert_parameter_type(pt);
 }
 
 ST_FUNC CString* parse_asm_str(void)
@@ -6063,7 +6067,7 @@ ST_FUNC void unary(void)
         next();
 	skip('(');
 	expr_type(&controlling_type, expr_eq);
-	convert_parameter_type (&controlling_type);
+	convert_expression_type(&controlling_type);
 
         nocode_wanted = saved_nocode_wanted;
 
@@ -6774,7 +6778,7 @@ ST_FUNC void gexpr(void)
         } while (tok == ',');
 
         /* convert array & function to pointer */
-        convert_parameter_type(&vtop->type);
+        convert_expression_type(&vtop->type);
 
         /* make builtin_constant_p((1,2)) return 0 (like on gcc) */
         if ((vtop->r & VT_VALMASK) == VT_CONST && nocode_wanted && !CONST_WANTED)
