@@ -8,6 +8,16 @@ void pointer_parameters(int *const cp, int *volatile vp, int *restrict rp)
                   "restrict pointer parameter remains qualified");
 }
 
+void array_parameters(int ca[const 2], int va[volatile 2], int ra[restrict 2])
+{
+    _Static_assert(_Generic(&ca, int *const *: 1, default: 0),
+                   "const array parameter adjusts to qualified pointer");
+    _Static_assert(_Generic(&va, int *volatile *: 1, default: 0),
+                   "volatile array parameter adjusts to qualified pointer");
+    _Static_assert(_Generic(&ra, int *restrict *: 1, default: 0),
+                   "restrict array parameter adjusts to qualified pointer");
+}
+
 void declared_const(int *const pointer);
 void declared_const(int *pointer)
 {

@@ -5144,6 +5144,7 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
 
     } else if (tok == '[') {
 	int saved_nocode_wanted = nocode_wanted;
+        int array_qualifiers = 0;
         /* array definition */
         next();
         n = -1;
@@ -5153,9 +5154,15 @@ static int post_type(CType *type, AttributeDef *ad, int storage, int td)
 	       in parameter decls.  The '*' as well, and then even only
 	       in prototypes (not function defs).  */
 	    switch (tok) {
+	    case TOK_CONST1: case TOK_CONST2: case TOK_CONST3:
+		array_qualifiers |= VT_CONSTANT;
+		next();
+		continue;
+	    case TOK_VOLATILE1: case TOK_VOLATILE2: case TOK_VOLATILE3:
+		array_qualifiers |= VT_VOLATILE;
+		next();
+		continue;
 	    case TOK_RESTRICT1: case TOK_RESTRICT2: case TOK_RESTRICT3:
-	    case TOK_CONST1:
-	    case TOK_VOLATILE1:
 	    case TOK_STATIC:
 	    case '*':
 		next();
@@ -5240,6 +5247,7 @@ check:
         s = sym_push(SYM_FIELD, type, 0, n);
         type->t = (t1 ? VT_VLA : VT_ARRAY) | VT_PTR;
         type->ref = s;
+        type->t |= array_qualifiers;
 
         if (vla_array_str) {
             /* for function args, the top dimension is converted to pointer */
