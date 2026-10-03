@@ -1873,8 +1873,10 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
 #if defined TCC_TARGET_ARM && TARGETOS_FreeBSD
         tcc_add_library(s1, "gcc_s"); // unwind code
 #endif
-        if (TCC_LIBTCC1[0])
+        if (TCC_LIBTCC1[0]) {
             tcc_add_support(s1, TCC_LIBTCC1);
+            tcc_add_library(s1, "c");
+        }
 #ifndef TCC_TARGET_MACHO
         if (s1->output_type != TCC_OUTPUT_MEMORY)
             tccelf_add_crtend(s1);
