@@ -698,5 +698,28 @@ void test(void)
 {
     destination = source;
 }
+#elif defined test_ptr_to_double
 
+int main(void)
+{
+    double d = "foo";
+    return 0;
+}
+
+#elif defined test_ptr_to_double_explicit
+
+int main(void)
+{
+    double d = (double)"foo";
+    return 0;
+}
+
+#elif defined test_funcptr_to_double
+
+static double f(double x) { return x; }
+
+int main(void)
+{
+    return (int)f(main);
+}
 #endif

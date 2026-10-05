@@ -3297,6 +3297,8 @@ error:
             cast_error(&vtop->type, type);
         }
 
+        if (df && !sf && !is_integer_btype(sbt_bt))
+            goto error;
         c = (vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST;
         if (c) {
             /* constant case: we can do it now */
@@ -3695,6 +3697,13 @@ static void verify_assign_cast(CType *dt)
         } else if (sbt == VT_STRUCT) {
             goto case_VT_STRUCT;
         }
+        /* XXX: more tests */
+        break;
+    case VT_FLOAT:
+    case VT_DOUBLE:
+    case VT_LDOUBLE:
+        if (sbt == VT_PTR || sbt == VT_FUNC)
+            goto error;
         /* XXX: more tests */
         break;
     case VT_STRUCT:

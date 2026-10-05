@@ -305,3 +305,12 @@ bar 15 12 34
 
 [test_discarded_restrict]
 60_errors_and_warnings.c:699: warning: assignment discards qualifiers from pointer target type
+
+[test_ptr_to_double]
+60_errors_and_warnings.c:705: error: cannot convert 'char [4]' to 'double'
+
+[test_ptr_to_double_explicit]
+60_errors_and_warnings.c:713: error: cannot convert 'char [4]' to 'double'
+
+[test_funcptr_to_double]
+60_errors_and_warnings.c:723: error: cannot convert 'int ()' to 'double'
