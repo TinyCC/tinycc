@@ -3298,6 +3298,8 @@ ST_FUNC int tcc_load_object_file(TCCState *s1,
     int *old_to_new_syms;
     char *sh_name, *name;
     SectionMergeInfo *sm_table, *sm;
+    unsigned long strsec_size;
+    unsigned long strtab_size;
     ElfW(Sym) *sym, *symtab;
     ElfW_Rel *rel;
     Section *s;
@@ -3312,6 +3314,9 @@ invalid:
         return tcc_error_noabort("invalid object file");
     }
     /* read sections */
+    if (ehdr.e_shentsize != sizeof(ElfW(Shdr)) || ehdr.e_shnum == 0
+        || ehdr.e_shstrndx >= ehdr.e_shnum)
+        goto invalid;
     shdr = load_data(fd, file_offset + ehdr.e_shoff,
                      sizeof(ElfW(Shdr)) * ehdr.e_shnum);
     sm_table = tcc_mallocz(sizeof(SectionMergeInfo) * ehdr.e_shnum);
@@ -3319,6 +3324,7 @@ invalid:
     /* load section names */
     sh = &shdr[ehdr.e_shstrndx];
     strsec = load_data(fd, file_offset + sh->sh_offset, sh->sh_size);
+    strsec_size = sh->sh_size;
 
     /* load symtab and strtab */
     old_to_new_syms = NULL;
@@ -3341,8 +3347,11 @@ invalid:
             sm_table[i].s = symtab_section;
 
             /* now load strtab */
+            if (sh->sh_link >= ehdr.e_shnum)
+                goto the_end;
             sh = &shdr[sh->sh_link];
             strtab = load_data(fd, file_offset + sh->sh_offset, sh->sh_size);
+            strtab_size = sh->sh_size;
         }
 	if (sh->sh_flags & SHF_COMPRESSED)
 	    seencompressed = 1;
@@ -3355,9 +3364,15 @@ invalid:
         if (i == ehdr.e_shstrndx)
             continue;
         sh = &shdr[i];
-	if (sh->sh_type == SHT_RELX)
+	if (sh->sh_type == SHT_RELX) {
+	  if (sh->sh_info >= ehdr.e_shnum)
+	    goto invalid;
 	  sh = &shdr[sh->sh_info];
+	}
         /* ignore sections types we do not handle (plus relocs to those) */
+        if (sh->sh_name >= strsec_size
+            || !memchr(strsec + sh->sh_name, 0, strsec_size - sh->sh_name))
+            goto invalid;
         sh_name = strsec + sh->sh_name;
         if (0 == strncmp(sh_name, ".debug_", 7)
          || 0 == strncmp(sh_name, ".stab", 5)) {
@@ -3475,9 +3490,13 @@ invalid:
         if (!s || !sm_table[i].new_section)
             continue;
         sh = &shdr[i];
+        if (sh->sh_link >= ehdr.e_shnum)
+            goto invalid;
         if (sh->sh_link > 0)
             s->link = sm_table[sh->sh_link].s;
         if (sh->sh_type == SHT_RELX) {
+            if (sh->sh_info >= ehdr.e_shnum)
+                goto invalid;
             s->sh_info = sm_table[sh->sh_info].s->sh_num;
             /* update backward link */
             s1->sections[s->sh_info]->reloc = s;
@@ -3494,12 +3513,17 @@ invalid:
     for(i = 1; i < nb_syms; i++, sym++) {
         if (sym->st_shndx != SHN_UNDEF &&
             sym->st_shndx < SHN_LORESERVE) {
+            if (sym->st_shndx >= ehdr.e_shnum)
+                goto invalid;
             sm = &sm_table[sym->st_shndx];
             if (sm->link_once) {
                 /* if a symbol is in a link once section, we use the
                    already defined symbol. It is very important to get
                    correct relocations */
                 if (ELFW(ST_BIND)(sym->st_info) != STB_LOCAL) {
+                    if (sym->st_name >= strtab_size
+                        || !memchr(strtab + sym->st_name, 0, strtab_size - sym->st_name))
+                        goto invalid;
                     name = strtab + sym->st_name;
                     sym_index = find_elf_sym(symtab_section, name);
                     if (sym_index)
@@ -3516,6 +3540,9 @@ invalid:
             sym->st_value += sm->offset;
         }
         /* add symbol */
+        if (sym->st_name >= strtab_size
+            || !memchr(strtab + sym->st_name, 0, strtab_size - sym->st_name))
+            goto invalid;
         name = strtab + sym->st_name;
         sym_index = set_elf_sym(symtab_section, sym->st_value, sym->st_size,
                                 sym->st_info, sym->st_other,
