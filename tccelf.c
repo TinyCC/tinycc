@@ -3776,7 +3776,15 @@ struct versym_info {
 };
 
 
-static void store_version(TCCState *s1, struct versym_info *v, char *dynstr)
+static int version_name_ok(char *dynstr, unsigned long dynstr_size, uint32_t off)
+{
+    return dynstr && off < dynstr_size
+        && memchr(dynstr + off, 0, dynstr_size - off) != NULL;
+}
+
+static int store_version(TCCState *s1, struct versym_info *v, char *dynstr,
+                         unsigned long dynstr_size,
+                         unsigned long verdef_size, unsigned long verneed_size)
 {
     char *lib, *version;
     uint32_t next;
@@ -3788,8 +3796,14 @@ static void store_version(TCCState *s1, struct versym_info *v, char *dynstr)
       ElfW(Verdef) *vdef = v->verdef;
       lib = NULL;
       do {
-        ElfW(Verdaux) *verdaux =
-	  (ElfW(Verdaux) *) (((char *) vdef) + vdef->vd_aux);
+        ElfW(Verdaux) *verdaux;
+        unsigned long vdoff = (unsigned long)((char *)vdef - (char *)v->verdef);
+        if (vdoff + sizeof(*vdef) > verdef_size)
+            return -1;
+        if (vdef->vd_aux > verdef_size
+            || vdoff + vdef->vd_aux + sizeof(*verdaux) > verdef_size)
+            return -1;
+        verdaux = (ElfW(Verdaux) *) (((char *) vdef) + vdef->vd_aux);
 
 #if DEBUG_VERSION
 	printf ("verdef: version:%u flags:%u index:%u, hash:%u\n",
@@ -3797,6 +3811,8 @@ static void store_version(TCCState *s1, struct versym_info *v, char *dynstr)
 		vdef->vd_hash);
 #endif
 	if (vdef->vd_cnt) {
+          if (!version_name_ok(dynstr, dynstr_size, verdaux->vda_name))
+              return -1;
           version = dynstr + verdaux->vda_name;
 
 	  if (lib == NULL)
@@ -3809,21 +3825,33 @@ static void store_version(TCCState *s1, struct versym_info *v, char *dynstr)
 #endif
 	}
         next = vdef->vd_next;
+        if (next && (unsigned long)((char *)vdef - (char *)v->verdef) + next + sizeof(*vdef) > verdef_size)
+            return -1;
         vdef = (ElfW(Verdef) *) (((char *) vdef) + next);
       } while (next);
     }
     if (v->versym && v->verneed) {
       ElfW(Verneed) *vneed = v->verneed;
       do {
-        ElfW(Vernaux) *vernaux =
-	  (ElfW(Vernaux) *) (((char *) vneed) + vneed->vn_aux);
+        ElfW(Vernaux) *vernaux;
+        unsigned long vnoff = (unsigned long)((char *)vneed - (char *)v->verneed);
+        if (vnoff + sizeof(*vneed) > verneed_size)
+            return -1;
+        if (vneed->vn_aux > verneed_size
+            || vnoff + vneed->vn_aux + sizeof(*vernaux) > verneed_size)
+            return -1;
+        vernaux = (ElfW(Vernaux) *) (((char *) vneed) + vneed->vn_aux);
 
+        if (!version_name_ok(dynstr, dynstr_size, vneed->vn_file))
+            return -1;
         lib = dynstr + vneed->vn_file;
 #if DEBUG_VERSION
 	printf ("verneed: %u %s\n", vneed->vn_version, lib);
 #endif
 	for (i = 0; i < vneed->vn_cnt; i++) {
 	  if ((vernaux->vna_other & 0x8000) == 0) { /* hidden */
+              if (!version_name_ok(dynstr, dynstr_size, vernaux->vna_name))
+                  return -1;
               version = dynstr + vernaux->vna_name;
               set_ver_to_ver(s1, &v->nb_local_ver, &v->local_ver, vernaux->vna_other,
                              lib, version);
@@ -3833,9 +3861,15 @@ static void store_version(TCCState *s1, struct versym_info *v, char *dynstr)
 		    vernaux->vna_flags, version);
 #endif
 	  }
+	  if (vernaux->vna_next
+              && (unsigned long)((char *)vernaux - (char *)v->verneed)
+                 + vernaux->vna_next + sizeof(*vernaux) > verneed_size)
+              return -1;
 	  vernaux = (ElfW(Vernaux) *) (((char *) vernaux) + vernaux->vna_next);
 	}
         next = vneed->vn_next;
+        if (next && (unsigned long)((char *)vneed - (char *)v->verneed) + next + sizeof(*vneed) > verneed_size)
+            return -1;
         vneed = (ElfW(Verneed) *) (((char *) vneed) + next);
       } while (next);
     }
@@ -3849,6 +3883,7 @@ static void store_version(TCCState *s1, struct versym_info *v, char *dynstr)
       }
     }
 #endif
+    return 0;
 }
 
 /* load a library / DLL
@@ -3863,6 +3898,8 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
     ElfW(Dyn) *dt, *dynamic;
 
     char *dynstr;
+    unsigned long dynstr_size = 0;
+    unsigned long verdef_size = 0, verneed_size = 0;
     int sym_index;
     const char *name, *soname;
     struct versym_info v;
@@ -3876,6 +3913,8 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
     }
 
     /* read sections */
+    if (ehdr.e_shentsize != sizeof(ElfW(Shdr)) || ehdr.e_shnum == 0)
+        return tcc_error_noabort("invalid dynamic object");
     shdr = load_data(fd, ehdr.e_shoff, sizeof(ElfW(Shdr)) * ehdr.e_shnum);
 
     /* load dynamic section and dynamic symbols */
@@ -3893,15 +3932,20 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
             dynamic = load_data(fd, sh->sh_offset, sh->sh_size);
             break;
         case SHT_DYNSYM:
+            if (sh->sh_link >= ehdr.e_shnum)
+                goto invalid_dyn;
             nb_syms = sh->sh_size / sizeof(ElfW(Sym));
             dynsym = load_data(fd, sh->sh_offset, sh->sh_size);
             sh1 = &shdr[sh->sh_link];
             dynstr = load_data(fd, sh1->sh_offset, sh1->sh_size);
+            dynstr_size = sh1->sh_size;
             break;
         case SHT_GNU_verdef:
+            verdef_size = sh->sh_size;
 	    v.verdef = load_data(fd, sh->sh_offset, sh->sh_size);
 	    break;
         case SHT_GNU_verneed:
+            verneed_size = sh->sh_size;
 	    v.verneed = load_data(fd, sh->sh_offset, sh->sh_size);
 	    break;
         case SHT_GNU_versym:
@@ -3917,10 +3961,16 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
         goto the_end;
 
     /* compute the real library name */
+    if (!dynsym || !dynstr || nb_syms <= 0)
+        goto invalid_dyn;
     soname = tcc_basename(filename);
     for(i = 0, dt = dynamic; i < nb_dts; i++, dt++)
-        if (dt->d_tag == DT_SONAME)
+        if (dt->d_tag == DT_SONAME) {
+            if (!dynstr || dt->d_un.d_val >= dynstr_size
+                || !memchr(dynstr + dt->d_un.d_val, 0, dynstr_size - dt->d_un.d_val))
+                goto invalid_dyn;
             soname = dynstr + dt->d_un.d_val;
+        }
 
     /* if the dll is already loaded, do not load it */
     if (tcc_add_dllref(s1, soname, level)->found)
@@ -3928,14 +3978,17 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
 
     if (v.nb_versyms != nb_syms)
         tcc_free (v.versym), v.versym = NULL;
-    else
-        store_version(s1, &v, dynstr);
+    else if (store_version(s1, &v, dynstr, dynstr_size, verdef_size, verneed_size) < 0)
+        goto invalid_dyn;
 
     /* add dynamic symbols in dynsym_section */
     for(i = 1, sym = dynsym + 1; i < nb_syms; i++, sym++) {
         sym_bind = ELFW(ST_BIND)(sym->st_info);
         if (sym_bind == STB_LOCAL)
             continue;
+        if (!dynstr || sym->st_name >= dynstr_size
+            || !memchr(dynstr + sym->st_name, 0, dynstr_size - sym->st_name))
+            goto invalid_dyn;
         name = dynstr + sym->st_name;
         sym_index = set_elf_sym(s1->dynsymtab_section, sym->st_value, sym->st_size,
                                 sym->st_info, sym->st_other, sym->st_shndx, name);
@@ -3975,6 +4028,11 @@ ST_FUNC int tcc_load_dll(TCCState *s1, int fd, const char *filename, int level)
 
  ret_success:
     ret = 0;
+    goto the_end;
+
+ invalid_dyn:
+    tcc_error_noabort("invalid dynamic object");
+
  the_end:
     tcc_free(dynstr);
     tcc_free(dynsym);
