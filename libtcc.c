@@ -213,8 +213,13 @@ PUB_FUNC char *tcc_fileextension (const char *name)
 
 ST_FUNC char *tcc_load_text(int fd)
 {
-    int len = lseek(fd, 0, SEEK_END);
-    char *buf = load_data(fd, 0, len + 1);
+    long len = lseek(fd, 0, SEEK_END);
+    char *buf;
+
+    /* A directory or an unseekable file yields an unusable size. */
+    if (len < 0 || len > INT_MAX - 1)
+        return NULL;
+    buf = load_data(fd, 0, len + 1);
     buf[len] = 0;
     return buf;
 }
@@ -1833,8 +1838,10 @@ static void insert_args(TCCState *s1, char ***pargv, int *pargc, int optind, con
     for (i = 0; i < *pargc; ++i)
         if (i == optind)
             dynarray_split(&argv, &argc, p, sep);
-        else
+        else if ((*pargv)[i]) /* argv[0] may be NULL (tcc_set_options) */
             dynarray_add(&argv, &argc, tcc_strdup((*pargv)[i]));
+        else
+            dynarray_add(&argv, &argc, NULL);
     dynarray_reset(&s1->argv, &s1->argc);
     *pargc = s1->argc = argc;
     *pargv = s1->argv = argv;
@@ -1871,6 +1878,8 @@ PUB_FUNC int tcc_parse_args(TCCState *s, int *pargc, char ***pargv)
             if (fd < 0)
                 return tcc_error_noabort("listfile '%s' not found", r);
             p = tcc_load_text(fd);
+            if (!p)
+                return tcc_error_noabort("could not read listfile '%s'", r);
             insert_args(s1, &argv, &argc, optind, p, 0);
             close(fd), tcc_free(p);
             continue;

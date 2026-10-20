@@ -37,6 +37,7 @@
 #include <math.h>
 #include <fcntl.h>
 #include <setjmp.h>
+#include <limits.h>
 #include <time.h>
 
 #ifndef _WIN32

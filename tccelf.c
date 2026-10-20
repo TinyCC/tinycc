@@ -4188,6 +4188,10 @@ ST_FUNC int tcc_load_ldscript(TCCState *s1, int fd)
 
     saved_ptr = s1->ld_p;
     s1->ld_p = text_ptr = (void*)tcc_load_text(fd);
+    if (!text_ptr) {
+        s1->ld_p = saved_ptr;
+        return tcc_error_noabort("could not read linker script");
+    }
     for(;;) {
         t = ld_next(s1, cmd, sizeof(cmd));
         if (t == LD_TOK_EOF)

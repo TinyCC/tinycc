@@ -2295,6 +2295,7 @@ ST_FUNC char* macho_tbd_soname(int fd) {
     char *soname, *data, *pos;
     char *ret = 0;
     pos = data = tcc_load_text(fd);
+    if (!data) return 0;
     if (!tbd_parse_movepast("install-name: ")) goto the_end;
     tbd_parse_skipws;
     tbd_parse_tramplequote;
@@ -2314,6 +2315,7 @@ ST_FUNC int macho_load_tbd(TCCState* s1, int fd, const char* filename, int lev)
     int ret = -1;
 
     pos = data = tcc_load_text(fd);
+    if (!data) return -1;
     if (!tbd_parse_movepast("install-name: ")) goto the_end;
     tbd_parse_skipws;
     tbd_parse_tramplequote;
