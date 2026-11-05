@@ -7677,6 +7677,7 @@ static void init_putz(init_params *p, unsigned long c, int size)
 #define DIF_SIZE_ONLY 2
 #define DIF_HAVE_ELEM 4
 #define DIF_CLEAR     8
+#define DIF_DIRTY     16
 
 /* delete relocations for specified range c ... c + size. Unfortunatly
    in very special cases, relocations may occur unordered */
@@ -7718,7 +7719,7 @@ static int decl_designator(init_params *p, CType *type, unsigned long c,
                            Sym **cur_field, int flags, int al)
 {
     Sym *s, *f;
-    int index, index_last, align, l, nb_elems, elem_size;
+    int index, index_last, align, l, nb_elems, elem_size, chain = 0;
     unsigned long corig = c;
 
     elem_size = 0;
@@ -7769,6 +7770,21 @@ static int decl_designator(init_params *p, CType *type, unsigned long c,
             c += cumofs;
         }
         cur_field = NULL;
+        if (nb_elems == 1 && (tok == '[' || tok == '.')) {
+            chain = 1;
+            break;
+        }
+    }
+    if (chain) {
+        /* more designators follow: continue in the subobject as an
+           elided list, so that following items fill it and then
+           return to the next element of this container */
+        elem_size = type_size(type, &align);
+        if (!(flags & DIF_SIZE_ONLY) && c - corig < al)
+            flags = (flags & ~DIF_CLEAR) | DIF_DIRTY;
+        decl_initializer(p, type, c, flags & ~DIF_FIRST);
+        c += elem_size;
+        return c - corig > al ? c - corig : al;
     }
     if (!cur_field) {
         if (tok == '=') {
@@ -7806,12 +7822,12 @@ static int decl_designator(init_params *p, CType *type, unsigned long c,
     /* Using designators the same element can be initialized more
        than once.  In that case we need to delete possibly already
        existing relocations. */
-    if (!(flags & DIF_SIZE_ONLY) && c - corig < al) {
+    if (!(flags & DIF_SIZE_ONLY) && (c - corig < al || (flags & DIF_DIRTY))) {
         decl_design_delrels(p->sec, c, elem_size * nb_elems);
         flags &= ~DIF_CLEAR; /* mark stack dirty too */
     }
 
-    decl_initializer(p, type, c, flags & ~DIF_FIRST);
+    decl_initializer(p, type, c, flags & ~(DIF_FIRST | DIF_DIRTY));
 
     if (!(flags & DIF_SIZE_ONLY) && nb_elems > 1) {
         Sym aref = {0};
@@ -8078,7 +8094,7 @@ static void decl_initializer(init_params *p, CType *type, unsigned long c, int f
 	/* In case of strings we have special handling for arrays, so
 	   don't consume them as initializer value (which would commit them
 	   to some anonymous symbol).  */
-	tok != TOK_LSTR && tok != TOK_STR &&
+	tok != TOK_LSTR && tok != TOK_STR && tok != '[' && tok != '.' &&
 	(!(flags & DIF_SIZE_ONLY)
             /* a struct may be initialized from a struct of same type, as in
                     struct {int x,y;} a = {1,2}, b = {3,4}, c[] = {a,b};
@@ -8185,7 +8201,7 @@ static void decl_initializer(init_params *p, CType *type, unsigned long c, int f
 
           do_init_list:
             /* zero memory once in advance */
-            if (!(flags & (DIF_CLEAR | DIF_SIZE_ONLY))) {
+            if (!(flags & (DIF_CLEAR | DIF_SIZE_ONLY | DIF_DIRTY))) {
                 init_putz(p, c, n*size1);
                 flags |= DIF_CLEAR;
             }
@@ -8217,6 +8233,11 @@ static void decl_initializer(init_params *p, CType *type, unsigned long c, int f
 		if (tok == '}')
 		    break;
 		skip(',');
+		if (no_oblock && (tok == '[' || tok == '.')) {
+		    /* designator for an enclosing container */
+		    unget_tok(',');
+		    break;
+		}
 	    }
         }
         if (!no_oblock)
