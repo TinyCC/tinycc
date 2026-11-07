@@ -288,7 +288,9 @@ static void arm64_spoff(int reg, uint64_t off)
         o(ARM64_ADD_IMM | ARM64_SF(1) | ARM64_RN(31) | ARM64_RD(reg) | ARM64_IMM12(off));
     else {
         arm64_movimm(30, off);
-        o(ARM64_ADD_REG | ARM64_SF(1) | ARM64_RM(30) | ARM64_RN(31) | ARM64_RD(reg) | (sub << 30));
+        // (add|sub) x(reg),sp,x30: in the shifted-register form, Rn 31 is xzr
+        o(ARM64_ADD_EXT | ARM64_SF(1) | ARM64_RM(30) | ARM64_EXTEND_UXTX |
+          ARM64_RN(31) | ARM64_RD(reg) | (sub << 30));
     }
 }
 

@@ -571,6 +571,7 @@
 #define ARM64_ADDS_REG    0x2B000000U
 #define ARM64_SUB_REG     0x4B000000U
 #define ARM64_SUBS_REG    0x6B000000U
+#define ARM64_ADD_EXT     0x0B200000U  /* ADD (extended register): Rn 31 is SP */
 #define ARM64_AND_REG     0x0A000000U
 #define ARM64_ANDS_REG    0x6A000000U
 #define ARM64_ORR_REG     0x2A000000U
@@ -719,6 +720,7 @@
 
 /* Extended register encoding */
 #define ARM64_EXTEND_LSL(lsl) (((uint32_t)(lsl) & 7) << 10)
+#define ARM64_EXTEND_UXTX     (3U << 13)
 
 /* MOV (register) - ORR with zero register */
 #define ARM64_MOV_REG     0x2A0003E0U
