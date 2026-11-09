@@ -377,7 +377,9 @@
  DEF_ASM(msr)
  DEF_ASM(nop)
  DEF_ASM(wfi)
+ DEF_ASM(wfit)
  DEF_ASM(wfe)
+ DEF_ASM(wfet)
  DEF_ASM(sev)
  DEF_ASM(sevl)
  DEF_ASM(isb)
@@ -695,6 +697,10 @@
 #define ARM64_MRS_FPSR    0xD53B4420U
 #define ARM64_MSR_FPCR    0xD51B4400U
 #define ARM64_MSR_FPSR    0xD51B4420U
+#define ARM64_WFE         0xD503205FU
+#define ARM64_WFET        0xD5031000U
+#define ARM64_WFI         0xD503207FU
+#define ARM64_WFIT        0xD5031020U
 
 /* Shifts (register) */
 #define ARM64_LSL_REG     0x1AC02000U

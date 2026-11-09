@@ -1717,6 +1717,33 @@ static void asm_move_wide(TCCState *s1, int token)
     }
 }
 
+/* Handle WFE,WFI */
+static void asm_wait(TCCState *s1, int token) {
+    uint32_t instr;
+    switch (token) {
+        case TOK_ASM_wfe: instr = ARM64_WFE; break;
+        case TOK_ASM_wfi: instr = ARM64_WFI; break;
+    }
+    emit_instr32(instr);
+}
+
+/* Handle WFET,WFIT */
+static void asm_wait_timeout(TCCState *s1, int token) {
+    Operand op;
+    uint32_t instr;
+    switch (token) {
+        case TOK_ASM_wfet: instr = ARM64_WFET; break;
+        case TOK_ASM_wfit: instr = ARM64_WFIT; break;
+    }
+    parse_operand(s1, &op);
+    if (!(op.type & OP_REG)) {
+        tcc_error("expected register in first operand");
+        return;
+    }
+    instr |= ARM64_RD(op.reg);
+    emit_instr32(instr);
+}
+
 /* Main assembler opcode dispatcher */
 ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 {
@@ -1803,6 +1830,16 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
         case TOK_ASM_dsb:
         case TOK_ASM_dmb:
             asm_barrier(s1, opcode);
+            break;
+
+        case TOK_ASM_wfe:
+        case TOK_ASM_wfi:
+            asm_wait(s1, opcode);
+            break;
+
+        case TOK_ASM_wfet:
+        case TOK_ASM_wfit:
+            asm_wait_timeout(s1, opcode);
             break;
 
         case TOK_ASM_nop:
