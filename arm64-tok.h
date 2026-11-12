@@ -701,6 +701,8 @@
 #define ARM64_WFET        0xD5031000U
 #define ARM64_WFI         0xD503207FU
 #define ARM64_WFIT        0xD5031020U
+#define ARM64_SEV         0xD503209FU
+#define ARM64_SEVL        0xD50320BFU
 
 /* Shifts (register) */
 #define ARM64_LSL_REG     0x1AC02000U

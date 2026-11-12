@@ -1717,12 +1717,14 @@ static void asm_move_wide(TCCState *s1, int token)
     }
 }
 
-/* Handle WFE,WFI */
+/* Handle WFE,WFI,SEV,SEVL */
 static void asm_wait(TCCState *s1, int token) {
     uint32_t instr;
     switch (token) {
         case TOK_ASM_wfe: instr = ARM64_WFE; break;
         case TOK_ASM_wfi: instr = ARM64_WFI; break;
+        case TOK_ASM_sev: instr = ARM64_SEV; break;
+        case TOK_ASM_sevl: instr = ARM64_SEVL; break;
     }
     emit_instr32(instr);
 }
@@ -1834,6 +1836,8 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
 
         case TOK_ASM_wfe:
         case TOK_ASM_wfi:
+        case TOK_ASM_sev:
+        case TOK_ASM_sevl:
             asm_wait(s1, opcode);
             break;
 
