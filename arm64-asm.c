@@ -1742,6 +1742,9 @@ static void asm_wait_timeout(TCCState *s1, int token) {
         tcc_error("expected register in first operand");
         return;
     }
+    if (!(op.reg_type & REG_X)) {
+        tcc_error("%s requires X register", get_tok_str(token, NULL));
+    }
     instr |= ARM64_RD(op.reg);
     emit_instr32(instr);
 }
