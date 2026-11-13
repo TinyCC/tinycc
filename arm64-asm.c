@@ -536,6 +536,14 @@ static void gen_ldst_pair(uint32_t base_opcode, int rt, int rt2, int rn,
     emit_instr32(instr);
 }
 
+static void gen_ldst_excl(uint32_t base_opcode, int rs, int rt, int rn) {
+	uint32_t instr = base_opcode;
+	instr |= ARM64_RS(rs);
+	instr |= ARM64_RN(rn);
+	instr |= ARM64_RT(rt);
+	emit_instr32(instr);
+}
+
 /* Generate B (branch) */
 /* Generate B/BL with base opcode */
 static void gen_b_or_bl(int32_t offset, uint32_t base_opcode)
@@ -1486,6 +1494,146 @@ static void asm_ldst_pair(TCCState *s1, int token)
     gen_ldst_pair(base_opcode, op1.reg, op2.reg, op3.reg, op3.e.v, size_log2);
 }
 
+static void asm_ldst_excl(TCCState *s1, int token) {
+    Operand status, op1, op2;
+    int rs = 0, rt, rn;
+    int32_t offset = 0;
+    uint32_t base_opcode;
+
+	int arity = 2;
+	switch (token) {
+        case TOK_ASM_stxr:
+        case TOK_ASM_stxrb:
+        case TOK_ASM_stxrh:
+        case TOK_ASM_stlxr:
+        case TOK_ASM_stlxrb:
+        case TOK_ASM_stlxrh:
+            arity = 3;
+            parse_operand(s1, &status);
+            if (tok == ',') next();
+            if (!(status.type & OP_REG) || !(status.reg_type & REG_W)) {
+                tcc_error("expected w register in first operand");
+                return;
+            }
+            break;
+	}
+
+    parse_operand(s1, &op1);
+    if (tok == ',') next();
+    parse_operand(s1, &op2);
+
+    if (!(op1.type & OP_REG)) {
+        tcc_error(arity == 2 ?
+            "expected register in first operand" :
+            "expected register in second operand");
+        return;
+    }
+    if (op2.type != OP_ADDR) {
+        tcc_error(arity == 2 ?
+            "expected address operand in second operand" :
+            "expected address operand in third operand");
+        return;
+    }
+
+    if (arity == 3) rs = status.reg;
+    rt = op1.reg;
+    rn = op2.reg;
+    offset = op2.e.v;
+
+    if (offset != 0) {
+        tcc_error("immediate offset to exclusive load/store must be 0");
+        return;
+    }
+
+    switch (token) {
+        case TOK_ASM_ldxrb:
+        case TOK_ASM_ldxrh:
+        case TOK_ASM_ldaxrb:
+        case TOK_ASM_ldaxrh:
+        case TOK_ASM_stxrb:
+        case TOK_ASM_stxrh:
+        case TOK_ASM_stlxrb:
+        case TOK_ASM_stlxrh:
+            if (!(op1.reg_type & REG_W)) {
+                tcc_error("%s requires a w register", get_tok_str(token, NULL));
+                return;
+            }
+            break;
+    }
+
+    switch (token) {
+        case TOK_ASM_ldxr:
+            if (op1.reg_type & REG_X) {
+                base_opcode = ARM64_LDXR_X;
+            } else if (op1.reg_type & REG_W) {
+                base_opcode = ARM64_LDXR_W;
+            } else {
+                tcc_error("ldxr requires a w or x register");
+                return;
+            }
+            break;
+        case TOK_ASM_ldxrb:
+            base_opcode = ARM64_LDXR_B;
+            break;
+        case TOK_ASM_ldxrh:
+            base_opcode = ARM64_LDXR_H;
+            break;
+        case TOK_ASM_ldaxr:
+            if (op1.reg_type & REG_X) {
+                base_opcode = ARM64_LDAXR_X;
+            } else if (op1.reg_type & REG_W) {
+                base_opcode = ARM64_LDAXR_W;
+            } else {
+                tcc_error("ldaxr requires a w or x register");
+                return;
+            }
+            break;
+        case TOK_ASM_ldaxrb:
+            base_opcode = ARM64_LDAXR_B;
+            break;
+        case TOK_ASM_ldaxrh:
+            base_opcode = ARM64_LDAXR_H;
+            break;
+        case TOK_ASM_stxr:
+            if (op1.reg_type & REG_X) {
+                base_opcode = ARM64_STXR_X;
+            } else if (op1.reg_type & REG_W) {
+                base_opcode = ARM64_STXR_W;
+            } else {
+                tcc_error("stxr requires a w or x register");
+                return;
+            }
+            break;
+        case TOK_ASM_stxrb:
+            base_opcode = ARM64_STXR_B;
+            break;
+        case TOK_ASM_stxrh:
+            base_opcode = ARM64_STXR_H;
+            break;
+        case TOK_ASM_stlxr:
+            if (op1.reg_type & REG_X) {
+                base_opcode = ARM64_STLXR_X;
+            } else if (op1.reg_type & REG_W) {
+                base_opcode = ARM64_STLXR_W;
+            } else {
+                tcc_error("stxr requires a w or x register");
+                return;
+            }
+            break;
+        case TOK_ASM_stlxrb:
+            base_opcode = ARM64_STLXR_B;
+            break;
+        case TOK_ASM_stlxrh:
+            base_opcode = ARM64_STLXR_H;
+            break;
+        default:
+            tcc_error("unsupported exclusive load/store instruction");
+            return;
+    }
+
+    gen_ldst_excl(base_opcode, rs, rt, rn);
+}
+
 static void asm_sysreg(TCCState *s1, int token)
 {
     Operand op;
@@ -1795,6 +1943,21 @@ ST_FUNC void asm_opcode(TCCState *s1, int opcode)
         case TOK_ASM_ldp:
         case TOK_ASM_stp:
             asm_ldst_pair(s1, opcode);
+            break;
+
+        case TOK_ASM_ldxr:
+        case TOK_ASM_ldxrb:
+        case TOK_ASM_ldxrh:
+        case TOK_ASM_stxr:
+        case TOK_ASM_stxrb:
+        case TOK_ASM_stxrh:
+        case TOK_ASM_ldaxr:
+        case TOK_ASM_ldaxrb:
+        case TOK_ASM_ldaxrh:
+        case TOK_ASM_stlxr:
+        case TOK_ASM_stlxrb:
+        case TOK_ASM_stlxrh:
+            asm_ldst_excl(s1, opcode);
             break;
 
         case TOK_ASM_b:

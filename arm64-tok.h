@@ -672,6 +672,24 @@
 #define ARM64_STP_D_PRE   0x6D800000U
 #define ARM64_STP_D_POST  0x6C800000U
 
+/* Load/store exclusive */
+#define ARM64_LDXR_W      0x885f7c00U
+#define ARM64_LDXR_X      0xC85f7c00U
+#define ARM64_LDXR_B      0x085f7c00U
+#define ARM64_LDXR_H      0x485f7c00U
+#define ARM64_LDAXR_W     0x885ffc00U
+#define ARM64_LDAXR_X     0xC85ffc00U
+#define ARM64_LDAXR_B     0x085ffc00U
+#define ARM64_LDAXR_H     0x485ffc00U
+#define ARM64_STXR_W      0x88007c00U
+#define ARM64_STXR_X      0xC8007c00U
+#define ARM64_STXR_B      0x08007c00U
+#define ARM64_STXR_H      0x48007c00U
+#define ARM64_STLXR_W     0x8800fc00U
+#define ARM64_STLXR_X     0xC800fc00U
+#define ARM64_STLXR_B     0x0800fc00U
+#define ARM64_STLXR_H     0x4800fc00U
+
 /* Branch instructions */
 #define ARM64_B           0x14000000U
 #define ARM64_BL          0x94000000U
@@ -752,6 +770,7 @@
 #define ARM64_RD(r)     ((uint32_t)(r) & 0x1FU)
 #define ARM64_RN(r)     (((uint32_t)(r) & 0x1FU) << 5)
 #define ARM64_RM(r)     (((uint32_t)(r) & 0x1FU) << 16)
+#define ARM64_RS(r)     (((uint32_t)(r) & 0x1FU) << 16)
 #define ARM64_RT(r)     ((uint32_t)(r) & 0x1FU)
 #define ARM64_RT2(r)    (((uint32_t)(r) & 0x1FU) << 10)
 
