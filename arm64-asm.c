@@ -1725,6 +1725,9 @@ static void asm_wait(TCCState *s1, int token) {
         case TOK_ASM_wfi: instr = ARM64_WFI; break;
         case TOK_ASM_sev: instr = ARM64_SEV; break;
         case TOK_ASM_sevl: instr = ARM64_SEVL; break;
+        default:
+            tcc_error("unknown wait instruction");
+            return;
     }
     emit_instr32(instr);
 }
@@ -1736,6 +1739,9 @@ static void asm_wait_timeout(TCCState *s1, int token) {
     switch (token) {
         case TOK_ASM_wfet: instr = ARM64_WFET; break;
         case TOK_ASM_wfit: instr = ARM64_WFIT; break;
+        default:
+            tcc_error("unknown wait instruction");
+            return;
     }
     parse_operand(s1, &op);
     if (!(op.type & OP_REG)) {
