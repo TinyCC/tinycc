@@ -100,6 +100,7 @@ endif
 96_nodata_wanted.test : FLAGS += -dt
 139_arm64_errors.test : FLAGS += -dt
 155_optional_errors.test : FLAGS += -dt
+157_null_to_nonoptional.test : FLAGS += -dt
 154_optional.test 156_typeof_unqual.test : FLAGS += -Wall -Werror
 154_optional.test 156_typeof_unqual.test : GEN = $(GEN-TCC)
 

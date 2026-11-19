@@ -899,6 +899,7 @@ static void vsetc(CType *type, int r, CValue *vc)
     vtop->r2 = VT_CONST;
     vtop->c = *vc;
     vtop->sym = NULL;
+    vtop->nulls = 0;
 }
 
 ST_FUNC void vswap(void)
@@ -2838,6 +2839,11 @@ static inline int is_null_pointer(SValue *p)
          );
 }
 
+static int has_implicit_null(SValue *sv)
+{
+    return sv->nulls > 0 || (sv->nulls == 0 && is_null_pointer(sv));
+}
+
 /* compare function types. OLD functions match any new functions */
 static int is_compatible_func(CType *type1, CType *type2)
 {
@@ -3072,6 +3078,8 @@ ST_FUNC void gen_op(int op)
     int t1, t2, bt1, bt2, t;
     CType type1, combtype;
     int op_class = op;
+
+    vtop[-1].nulls = vtop->nulls = 0;
 
     if (op == TOK_SHR || op == TOK_SAR || op == TOK_SHL)
         op_class = SHIFT_OP;
@@ -3686,6 +3694,11 @@ static void verify_assign_cast(CType *dt)
     st = &vtop->type; /* source type */
     dbt = dt->t & VT_BTYPE;
     sbt = st->t & VT_BTYPE;
+    if (dbt == VT_PTR && !(dt->t & VT_ARRAY)
+        && !is_optional_type(pointed_type(dt)) && has_implicit_null(vtop))
+        tcc_warning_c(warn_null_to_nonoptional)(
+            "null pointer constant converted to pointer with non-optional target type");
+    vtop->nulls = 0;
     if (dt->t & VT_CONSTANT)
         tcc_warning("assignment of read-only location");
     switch(dbt) {
@@ -5856,7 +5869,10 @@ ST_FUNC void unary(void)
                 return;
             } else {
                 unary();
+                /* Remember a pointer operand even if the cast folds to 0. */
+                r = vtop->nulls < 0 || (vtop->type.t & VT_BTYPE) == VT_PTR;
                 gen_cast(&type);
+                vtop->nulls = r ? -1 : 0;
             }
         } else if (tok == '{') {
 	    int saved_nocode_wanted = nocode_wanted;
@@ -6753,6 +6769,7 @@ static int is_cond_bool(SValue *sv)
 static void expr_cond(void)
 {
     int tt, u, r1, r2, rc, t1, t2, islv, c, g;
+    int nulls;
     SValue sv;
     CType type;
 
@@ -6804,6 +6821,9 @@ static void expr_cond(void)
 
         if ((vtop->type.t & VT_BTYPE) == VT_FUNC)
           mk_pointer(&vtop->type);
+
+        /* Defer null-arm warnings until the destination type is known. */
+        nulls = has_implicit_null(&sv) || has_implicit_null(vtop);
 
         /* cast operands to correct type according to ISOC rules */
         if (!combine_types(&type, &sv, vtop, '?'))
@@ -6877,6 +6897,7 @@ static void expr_cond(void)
 
         if (islv)
           indir();
+        vtop->nulls = (type.t & VT_BTYPE) == VT_PTR ? nulls : 0;
     }
 }
 
@@ -8392,9 +8413,11 @@ static void decl_initializer(init_params *p, CType *type, unsigned long c, int f
             && (vtop->r & (VT_VALMASK | VT_LVAL | VT_SYM)) == VT_CONST
             && vtop->c.i == 0
             && btype_size(type->t & VT_BTYPE) /* not for fp constants */
-            )
+            ) {
+            if ((type->t & VT_BTYPE) == VT_PTR)
+                verify_assign_cast(type);
             vpop();
-        else
+        } else
             init_putv(p, type, c);
     }
 }

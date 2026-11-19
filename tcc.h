@@ -484,6 +484,7 @@ typedef struct SValue {
     unsigned short r;      /* register + flags */
     unsigned short r2;     /* second register, used for 'long long'
                               type. If not used, set to VT_CONST */
+    int nulls; /* 1 for an implicit null arm, -1 for a cast from a pointer */
     union {
       struct { int jtrue, jfalse; }; /* forward jmps */
       CValue c;         /* constant, if VT_CONST */
@@ -766,6 +767,7 @@ struct TCCState {
     unsigned char warn_unsupported;
     unsigned char warn_implicit_function_declaration;
     unsigned char warn_discarded_qualifiers;
+    unsigned char warn_null_to_nonoptional;
     #define WARN_ON  1 /* warning is on (-Woption) */
     unsigned char warn_num; /* temp var for tcc_warning_c() */
 

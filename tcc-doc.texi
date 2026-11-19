@@ -322,6 +322,14 @@ Warn about implicit function declaration (missing prototype).
 @item -Wdiscarded-qualifiers
 Warn when const is dropped.
 
+@item -Wnull-to-nonoptional
+Warn when a null pointer constant is implicitly converted to a pointer
+whose referenced type is not @code{_Optional}-qualified.  This includes
+null arms of conditional expressions, using the eventual destination type.
+Explicit pointer casts suppress pending warnings from conditional arms.
+Casts forming null pointer constants, such as @code{(void *)0}, are still
+checked when implicitly converted.  Disabled by default.
+
 @item -Wunsupported
 Warn about unsupported GCC features that are ignored by TCC.
 
