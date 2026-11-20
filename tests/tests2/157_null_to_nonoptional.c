@@ -67,4 +67,14 @@ int *function(int i, int j, int *pi)
 {
     return i ? (int *)0 : (j ? pi : 0); /* warn */
 }
+
+#elif defined test_indirection
+#pragma comment(option, "-Werror=null-to-nonoptional")
+void accept(int *);
+void function(int i, int **ppi)
+{
+    if (i)
+        accept(*(i ? ppi : 0));
+    accept(i ? &*(i ? *ppi : 0) : *ppi);
+}
 #endif

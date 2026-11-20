@@ -5906,6 +5906,7 @@ ST_FUNC void unary(void)
         next();
         unary();
         indir();
+        vtop->nulls = 0;
         break;
     case '&':
         next();

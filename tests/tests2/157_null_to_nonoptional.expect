@@ -22,3 +22,5 @@
 
 [test_cast_arm]
 157_null_to_nonoptional.c:68: warning: null pointer constant converted to pointer with non-optional target type
+
+[test_indirection]
