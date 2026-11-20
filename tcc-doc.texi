@@ -898,7 +898,8 @@ where it is a string literal).
 @item The @code{__alignof__} keyword can be used as @code{sizeof}
 to get the alignment of a type or an expression.
 
-@item The @code{typeof(x)} returns the type of @code{x}.
+@item @code{typeof(x)} returns the type of @code{x}. The C23 operator
+@code{typeof_unqual(x)} gives the non-atomic, unqualified version of that type.
 @code{x} is an expression or a type.
 
 @item Computed gotos: @code{&&label} returns a pointer of type

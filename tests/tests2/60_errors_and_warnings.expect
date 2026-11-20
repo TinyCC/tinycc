@@ -317,3 +317,6 @@ bar 15 12 34
 
 [test_const_vla_typedef]
 60_errors_and_warnings.c:731: warning: assignment of read-only location
+
+[test_typeof_unqual_bitfield]
+60_errors_and_warnings.c:737: error: typeof applied to a bit-field

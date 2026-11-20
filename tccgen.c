@@ -5027,12 +5027,19 @@ static int parse_btype(CType *type, AttributeDef *ad, int ignore_label)
                 t = (t & ~(VT_BTYPE|VT_LONG)) | u;
             }
             continue;
-            /* GNUC typeof */
         case TOK_TYPEOF1:
         case TOK_TYPEOF2:
         case TOK_TYPEOF3:
+        case TOK_TYPEOF_UNQUAL1:
+        case TOK_TYPEOF_UNQUAL2:
+            n = tok;
             next();
             parse_expr_type(&type1);
+            if (type1.t & VT_BITFIELD)
+                tcc_error("typeof applied to a bit-field");
+            if ((n == TOK_TYPEOF_UNQUAL1 || n == TOK_TYPEOF_UNQUAL2)
+                && type_qualifiers(&type1))
+                qualifier_type(&type1)->t &= ~VT_QUAL;
             /* remove all storage modifiers except typedef */
             type1.t &= ~(VT_STORAGE&~VT_TYPEDEF);
             if (type1.ref) {

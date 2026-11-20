@@ -731,4 +731,8 @@ void f(int n)
     row[0] = 1; /* warn */
 }
 
+#elif defined test_typeof_unqual_bitfield
+
+struct { unsigned int b : 1; } s;
+typeof_unqual(s.b) b; /* error */
 #endif
