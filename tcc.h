@@ -1067,7 +1067,8 @@ struct filespec {
 #define VT_OPTIONAL    0x0800  /* _Optional qualifier */
 /* Keep qualifier bits together for A32 data-processing immediates. */
 #define VT_QUAL        (VT_CONSTANT | VT_VOLATILE | VT_RESTRICT | VT_OPTIONAL)
-#define VT_VLA         0x1000  /* VLA type (also has VT_PTR and VT_ARRAY) */
+#define VT_VLA         0x1000  /* VLA type (also has VT_PTR) */
+#define VT_ARRAY_MASK  (VT_ARRAY | VT_VLA)
 #define VT_LONG        0x2000  /* long type (also has VT_INT rsp. VT_LLONG) */
 
 /* storage */

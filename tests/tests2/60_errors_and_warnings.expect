@@ -314,3 +314,6 @@ bar 15 12 34
 
 [test_funcptr_to_double]
 60_errors_and_warnings.c:723: error: cannot convert 'int ()' to 'double'
+
+[test_const_vla_typedef]
+60_errors_and_warnings.c:731: warning: assignment of read-only location

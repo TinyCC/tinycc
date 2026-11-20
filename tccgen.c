@@ -2893,22 +2893,23 @@ static int compare_types(CType *type1, CType *type2, int unqualified)
         t2 &= ~VT_DEFSIGN;
     }
     /* XXX: bitfields ? */
+    if ((t1 & VT_ARRAY_MASK) && (t2 & VT_ARRAY_MASK)) {
+        if ((t1 ^ t2) & ~VT_ARRAY_MASK)
+            return 0;
+        /* Only fixed bounds are stored as element counts. */
+        if ((t1 & t2 & VT_ARRAY) && type1->ref->c >= 0 && type2->ref->c >= 0
+            && type1->ref->c != type2->ref->c)
+            return 0;
+        return compare_types(pointed_type(type1), pointed_type(type2), unqualified);
+    }
     if (t1 != t2)
         return 0;
-
-    if ((t1 & VT_ARRAY)
-        && !(type1->ref->c < 0
-          || type2->ref->c < 0
-          || type1->ref->c == type2->ref->c))
-            return 0;
 
     /* test more complicated cases */
     bt1 = t1 & VT_BTYPE;
     if (bt1 == VT_PTR) {
         type1 = pointed_type(type1);
         type2 = pointed_type(type2);
-        if (unqualified && (t1 & VT_ARRAY))
-            return compare_types(type1, type2, 1);
         return is_compatible_types(type1, type2);
     } else if (bt1 == VT_STRUCT) {
         return (type1->ref == type2->ref);
@@ -2917,6 +2918,15 @@ static int compare_types(CType *type1, CType *type2, int unqualified)
     } else {
         return 1;
     }
+}
+
+/* A known constant bound takes precedence over a VLA bound, and both
+   take precedence over an unknown bound. */
+static int array_bound_rank(CType *type)
+{
+    if (type->t & VT_VLA)
+        return 1;
+    return type->ref->c < 0 ? 0 : 2;
 }
 
 /* Combine bounds along compatible pointer and array types. Each level
@@ -2928,7 +2938,8 @@ static CType composite_array_bounds(CType *a, CType *b)
     if (a->ref == b->ref || (a->t & VT_BTYPE) != VT_PTR
         || (b->t & VT_BTYPE) != VT_PTR)
         return *b;
-    if ((a->t & b->t & VT_ARRAY) && a->ref->c >= 0 && b->ref->c < 0) {
+    if ((a->t & VT_ARRAY_MASK) && (b->t & VT_ARRAY_MASK)
+        && array_bound_rank(a) > array_bound_rank(b)) {
         CType *tmp = a;
         a = b;
         b = tmp;
@@ -3599,17 +3610,20 @@ static void check_restrict_type(CType *type)
         tcc_error("restrict-qualified type must be a pointer to object or incomplete type");
 }
 
-/* Remove _Optional from TYPE.  Array qualification is represented on the
-   element type, so copy each shared array node before changing it. */
-static void unqualify_optional(CType *type)
+/* Copy shared array nodes before changing the element qualifiers. */
+static CType *qualifier_type(CType *type)
 {
-    if (!is_optional_type(type))
-        return;
-    while (type->t & VT_ARRAY) {
+    while (type->t & VT_ARRAY_MASK) {
         type->ref = sym_push(SYM_FIELD, &type->ref->type, 0, type->ref->c);
         type = pointed_type(type);
     }
-    type->t &= ~VT_OPTIONAL;
+    return type;
+}
+
+static void unqualify_optional(CType *type)
+{
+    if (is_optional_type(type))
+        qualifier_type(type)->t &= ~VT_OPTIONAL;
 }
 
 static void unqualify_optional_target(CType *type)
@@ -3623,15 +3637,13 @@ static void unqualify_optional_target(CType *type)
 
 static int is_optional_type(CType *type)
 {
-    while (type->t & VT_ARRAY)
-        type = pointed_type(type);
-    return !!(type->t & VT_OPTIONAL);
+    return !!(type_qualifiers(type) & VT_OPTIONAL);
 }
 
 /* Array qualifiers are represented on the element type. */
 static int type_qualifiers(CType *type)
 {
-    while (type->t & VT_ARRAY)
+    while (type->t & VT_ARRAY_MASK)
         type = pointed_type(type);
     return type->t & VT_QUAL;
 }
@@ -3698,7 +3710,7 @@ static void verify_assign_cast(CType *dt)
             type2 = st;
         else
             goto error;
-        if ((st->t & VT_ARRAY) || sbt == VT_FUNC) {
+        if ((st->t & VT_ARRAY_MASK) || sbt == VT_FUNC) {
             ct = *type2;
             unqualify_optional(&ct);
             type2 = &ct;
@@ -4795,10 +4807,7 @@ static void sym_to_attr(AttributeDef *ad, Sym *s)
    are added to the element type, copied because it could be a typedef. */
 static void parse_btype_qualify(CType *type, int qualifiers)
 {
-    while (type->t & VT_ARRAY) {
-        type->ref = sym_push(SYM_FIELD, &type->ref->type, 0, type->ref->c);
-        type = &type->ref->type;
-    }
+    type = qualifier_type(type);
     if (qualifiers & VT_RESTRICT)
         check_restrict_type(type);
     type->t |= qualifiers;
@@ -5102,7 +5111,7 @@ static inline void convert_parameter_type(CType *pt)
 /* apply the conversions required for an expression value */
 static inline void convert_expression_type(CType *pt)
 {
-    int converts = (pt->t & VT_BTYPE) == VT_FUNC || (pt->t & VT_ARRAY);
+    int converts = (pt->t & VT_BTYPE) == VT_FUNC || (pt->t & VT_ARRAY_MASK);
 
     pt->t &= ~VT_QUAL;
     convert_parameter_type(pt);

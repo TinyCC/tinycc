@@ -271,4 +271,10 @@ char *function(_Optional const char *pocc)
     return pocc + 0; /* warn */
 }
 
+#elif defined test_optional_vla_obj
+void f(int n)
+{
+    _Optional int aoi[n]; /* error */
+}
+
 #endif

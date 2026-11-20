@@ -53,6 +53,16 @@ int main()
   return 0;
 }
 
+void vla_compat(int n, int (*pai)[n], const int (*pcai)[n], int (*pa4i)[4])
+{
+    _Static_assert(__builtin_types_compatible_p(int[n], int[4]),
+                   "variable and fixed bounds are compatible");
+    _Static_assert(__builtin_types_compatible_p(typeof(n ? pcai : pai), typeof(pcai)),
+                   "conditional transmits const to VLA elements");
+    _Static_assert(sizeof *(n ? pa4i : pai) == 4 * sizeof(int),
+                   "conditional retains the known constant bound");
+}
+
 typedef int Unknown[], Seven[7];
 
 void nested_bounds(int c, Unknown *(*p)[4], Seven *(*q)[])

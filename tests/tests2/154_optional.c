@@ -291,6 +291,16 @@ static Fn *function_decay(_Optional Fn *pofri)
     return *pofri;
 }
 
+static int *vla_decay(int n, _Optional int (*poai)[n])
+{
+    typedef int Row[n];
+    _Static_assert(__builtin_types_compatible_p(typeof(&*poai), Row *),
+                   "address removes optional from VLA elements");
+    _Static_assert(_Generic(*poai, int *: 1, default: 0),
+                   "VLA conversion removes optional");
+    return *poai;
+}
+
 int main(void)
 {
     (void)i_macro;
@@ -306,6 +316,7 @@ int main(void)
     (void)adjusted_function_typedef;
     (void)assignment_adds_qualifier;
     (void)array_decay;
+    (void)vla_decay;
     (void)function_decay;
     return 0;
 }

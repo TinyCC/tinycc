@@ -722,4 +722,13 @@ int main(void)
 {
     return (int)f(main);
 }
+
+#elif defined test_const_vla_typedef
+void f(int n)
+{
+    typedef int Row[n];
+    const Row row;
+    row[0] = 1; /* warn */
+}
+
 #endif

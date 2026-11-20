@@ -138,3 +138,6 @@
 
 [test_const_qualifier_loss_after_optional_arithmetic]
 155_optional_errors.c:271: warning: assignment discards qualifiers from pointer target type
+
+[test_optional_vla_obj]
+155_optional_errors.c:277: error: 'aoi' has optional-qualified type
