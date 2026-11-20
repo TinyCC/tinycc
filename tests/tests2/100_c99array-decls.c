@@ -52,3 +52,15 @@ int main()
 {
   return 0;
 }
+
+typedef int Unknown[], Seven[7];
+
+void nested_bounds(int c, Unknown *(*p)[4], Seven *(*q)[])
+{
+    typeof(c ? p : q) pq;
+    typeof(c ? q : p) qp;
+    _Static_assert(sizeof *pq == 4 * sizeof (*pq)[0], "outer bound from p");
+    _Static_assert(sizeof *qp == sizeof *pq, "outer bound in reverse order");
+    _Static_assert(sizeof *(*pq)[0] == sizeof(Seven), "inner bound from q");
+    _Static_assert(sizeof *(*qp)[0] == sizeof(Seven), "inner bound in reverse order");
+}

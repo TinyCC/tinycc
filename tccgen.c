@@ -2919,6 +2919,27 @@ static int compare_types(CType *type1, CType *type2, int unqualified)
     }
 }
 
+/* Combine bounds along compatible pointer and array types. Each level
+   may get its bound from a different operand. */
+static CType composite_array_bounds(CType *a, CType *b)
+{
+    CType type, elem;
+
+    if (a->ref == b->ref || (a->t & VT_BTYPE) != VT_PTR
+        || (b->t & VT_BTYPE) != VT_PTR)
+        return *b;
+    if ((a->t & b->t & VT_ARRAY) && a->ref->c >= 0 && b->ref->c < 0) {
+        CType *tmp = a;
+        a = b;
+        b = tmp;
+    }
+    type = *b;
+    elem = composite_array_bounds(pointed_type(a), pointed_type(b));
+    if (elem.t != b->ref->type.t || elem.ref != b->ref->type.ref)
+        type.ref = sym_push(SYM_FIELD, &elem, 0, b->ref->c);
+    return type;
+}
+
 #define CMP_OP 'C'
 #define SHIFT_OP 'S'
 
@@ -2970,9 +2991,9 @@ static int combine_types(CType *dest, SValue *op1, SValue *op2, int op)
             CType *pt2 = pointed_type(type2);
             int pbt1 = pt1->t & VT_BTYPE;
             int pbt2 = pt2->t & VT_BTYPE;
-            int newquals, copied = 0;
-            if (pbt1 != VT_VOID && pbt2 != VT_VOID
-                && !compare_types(pt1, pt2, 1/*unqualif*/)) {
+            int compatible = pbt1 != VT_VOID && pbt2 != VT_VOID
+                && compare_types(pt1, pt2, 1/*unqualif*/);
+            if (pbt1 != VT_VOID && pbt2 != VT_VOID && !compatible) {
                 if (op != '?' && op != CMP_OP)
                   ret = 0;
                 else
@@ -2982,35 +3003,16 @@ static int combine_types(CType *dest, SValue *op1, SValue *op2, int op)
                      : "pointer type mismatch in comparison('%s' and '%s')");
             }
             if (op == '?') {
-                /* pointers to void get preferred, otherwise the
-                   pointed to types minus qualifs should be compatible */
+                CType target;
+                int quals = type_qualifiers(pt1) | type_qualifiers(pt2);
+
                 type = *((pbt1 == VT_VOID) ? type1 : type2);
-                /* combine qualifs */
-                newquals = type_qualifiers(pt1) | type_qualifiers(pt2);
-                if ((~type_qualifiers(pointed_type(&type))) & newquals)
-                  {
-                    /* copy the pointer target symbol */
-                    type.ref = sym_push(SYM_FIELD, &type.ref->type,
-                                        0, type.ref->c);
-                    copied = 1;
-                    parse_btype_qualify(pointed_type(&type), newquals);
-                  }
-                /* pointers to incomplete arrays get converted to
-                   pointers to completed ones if possible */
-                if (pt1->t & VT_ARRAY
-                    && pt2->t & VT_ARRAY
-                    && pointed_type(&type)->ref->c < 0
-                    && (pt1->ref->c > 0 || pt2->ref->c > 0))
-                  {
-                    if (!copied)
-                      type.ref = sym_push(SYM_FIELD, &type.ref->type,
-                                          0, type.ref->c);
-                    pointed_type(&type)->ref =
-                        sym_push(SYM_FIELD, &pointed_type(&type)->ref->type,
-                                 0, pointed_type(&type)->ref->c);
-                    pointed_type(&type)->ref->c =
-                        0 < pt1->ref->c ? pt1->ref->c : pt2->ref->c;
-                  }
+                target = compatible ? composite_array_bounds(pt1, pt2)
+                                    : *pointed_type(&type);
+                if (quals & ~type_qualifiers(&target))
+                    parse_btype_qualify(&target, quals);
+                if (target.t != type.ref->type.t || target.ref != type.ref->type.ref)
+                    type.ref = sym_push(SYM_FIELD, &target, 0, type.ref->c);
             }
         }
         if (op == CMP_OP)
