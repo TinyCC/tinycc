@@ -5511,6 +5511,9 @@ static void gfunc_param_typed(Sym *func, Sym *arg)
         /* default casting : only need to convert float to double */
         if ((vtop->type.t & VT_BTYPE) == VT_FLOAT) {
             gen_cast_s(VT_DOUBLE);
+        } else if ((vtop->type.t & VT_BTYPE) == VT_STRUCT) {
+            /* Pass the unqualified aggregate value. */
+            vtop->type.t &= ~VT_QUAL;
         } else if (vtop->type.t & VT_BITFIELD) {
             type.t = vtop->type.t & (VT_BTYPE | VT_UNSIGNED);
 	    type.ref = vtop->type.ref;
