@@ -6905,6 +6905,22 @@ static void expr_cond(void)
     }
 }
 
+static int has_const_member(CType *type)
+{
+    Sym *f;
+
+    if (type->t & VT_ARRAY)
+        return has_const_member(pointed_type(type));
+    if ((type->t & VT_BTYPE) != VT_STRUCT)
+        return 0;
+    for (f = type->ref->next; f; f = f->next) {
+        if ((type_qualifiers(&f->type) & VT_CONSTANT)
+            || has_const_member(&f->type))
+            return 1;
+    }
+    return 0;
+}
+
 static void expr_eq(void)
 {
     int t;
@@ -6920,6 +6936,10 @@ static void expr_eq(void)
             expr_eq();
             gen_op(TOK_ASSIGN_OP(t));
         }
+        if ((vtop[-1].type.t & VT_BTYPE) == VT_STRUCT
+            && !(vtop[-1].type.t & VT_CONSTANT)
+            && has_const_member(&vtop[-1].type))
+            tcc_warning("assignment of read-only location");
         vstore();
     }
 }

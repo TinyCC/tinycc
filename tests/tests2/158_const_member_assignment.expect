@@ -1,0 +1,26 @@
+[test_direct_member]
+158_const_member_assignment.c:5: warning: assignment of read-only location
+
+[test_nested_member]
+158_const_member_assignment.c:13: warning: assignment of read-only location
+
+[test_array_member]
+158_const_member_assignment.c:20: warning: assignment of read-only location
+
+[test_array_of_struct]
+158_const_member_assignment.c:28: warning: assignment of read-only location
+
+[test_union_member]
+158_const_member_assignment.c:35: warning: assignment of read-only location
+
+[test_nested_union]
+158_const_member_assignment.c:43: warning: assignment of read-only location
+
+[test_const_destination]
+158_const_member_assignment.c:50: warning: assignment of read-only location
+
+[test_initialisation]
+
+[test_pointer_to_const]
+
+[test_mutable_member]
