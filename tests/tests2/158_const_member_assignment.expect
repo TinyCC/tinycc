@@ -24,3 +24,13 @@
 [test_pointer_to_const]
 
 [test_mutable_member]
+
+[test_cached_const]
+158_const_member_assignment.c:82: warning: assignment of read-only location
+158_const_member_assignment.c:83: warning: assignment of read-only location
+
+[test_cached_mutable]
+
+[test_const_struct_member_not_cached]
+158_const_member_assignment.c:100: warning: assignment of read-only location
+158_const_member_assignment.c:102: warning: assignment of read-only location

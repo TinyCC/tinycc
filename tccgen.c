@@ -6907,17 +6907,23 @@ static void expr_cond(void)
 
 static int has_const_member(CType *type)
 {
-    Sym *f;
+    Sym *s, *f;
 
     if (type->t & VT_ARRAY)
         return has_const_member(pointed_type(type));
     if ((type->t & VT_BTYPE) != VT_STRUCT)
         return 0;
-    for (f = type->ref->next; f; f = f->next) {
+    s = type->ref;
+    if (s->a.const_members)
+        return s->a.const_members == 2;
+    for (f = s->next; f; f = f->next) {
         if ((type_qualifiers(&f->type) & VT_CONSTANT)
-            || has_const_member(&f->type))
+            || has_const_member(&f->type)) {
+            s->a.const_members = 2;
             return 1;
+        }
     }
+    s->a.const_members = 1;
     return 0;
 }
 

@@ -74,4 +74,33 @@ void f(struct Outer *a, struct Outer *b)
     *a = *b;
 }
 
+#elif defined test_cached_const
+struct Inner { const int value; };
+struct Outer { struct Inner elements[3]; };
+void f(struct Outer *a, struct Outer *b)
+{
+    *a = *b;
+    *a = *b;
+}
+
+#elif defined test_cached_mutable
+struct Inner { int value; };
+struct Outer { struct Inner elements[3]; };
+void f(struct Outer *a, struct Outer *b)
+{
+    *a = *b;
+    *a = *b;
+}
+
+#elif defined test_const_struct_member_not_cached
+struct Inner { int value; };
+struct Outer { const struct Inner member; };
+void f(struct Outer *a, struct Outer *b, struct Inner *x, struct Inner *y)
+{
+    *a = *b;
+    *x = *y;
+    *a = *b;
+    *x = *y;
+}
+
 #endif
