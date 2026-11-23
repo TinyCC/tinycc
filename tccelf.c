@@ -2302,7 +2302,9 @@ static int sort_sections(TCCState *s1, int *sec_order, struct dyn_inf *d)
             if (s1->plt && s == s1->plt->reloc)
                 k = 0x21;
         } else if (s->sh_flags & SHF_EXECINSTR) {
-            k = 0x30;
+            k = 0x60;
+            if (s1->static_link)
+                k = 0x30; /* .text first (for i386 linux kernel) */
         /* RELRO sections --> */
         } else if (s->sh_flags & SHF_TLS) {
             if (s->sh_addralign > tls_align)
@@ -2322,7 +2324,7 @@ static int sort_sections(TCCState *s1, int *sec_order, struct dyn_inf *d)
             k = 0x45; /* +1 for data.ro */
         /* <-- */
         } else if (s->sh_type == SHT_NOTE) {
-            k = 0x60; d->notes = 1;
+            k = 0x08, d->notes = 1;
         } else if (s->sh_type == SHT_NOBITS) {
             k = 0x70; /* bss */
         } else if (s == d->interp) {
@@ -2331,14 +2333,9 @@ static int sort_sections(TCCState *s1, int *sec_order, struct dyn_inf *d)
             k = 0x50; /* data */
         }
         k += j;
-
-        // THIS further breaks linking order of executable section for kernel
-        // it is NOT clarified how this interacts with TLS related changes
-        //
-        ///* make our standard sections come last to have _etext/_edata correct values */
-        //if (s->sh_num <= bss_section->sh_num)
-        //    ++k;
-
+        /* make our standard sections come last to have _etext/_edata correct values */
+        if (s->sh_num <= bss_section->sh_num && !s1->static_link)
+            ++k;
         /* make RELRO section writable */
         if ((k & 0xfff0) == 0x140)
             k += 0x100, s->sh_flags |= SHF_WRITE;
@@ -3407,6 +3404,7 @@ invalid:
                 && strcmp (s->name, ".eh_frame")
                 /* some crt1.o seem to have two ".note.GNU-stack" (SHT_NOTE & SHT_PROGBITS) */
                 && strcmp (s->name, ".note.GNU-stack")
+                && (sh->sh_type != SHT_NOBITS || s->sh_type != SHT_PROGBITS)
                 ) {
                 tcc_error_noabort("section type conflict: %s %02x <> %02x", s->name, sh->sh_type, s->sh_type);
                 goto the_end;

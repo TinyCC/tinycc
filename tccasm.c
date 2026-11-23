@@ -941,10 +941,14 @@ static void asm_parse_directive(TCCState *s1, int global)
 	        cur_text_section->sh_addralign = 1;
                 /* Make .init and .fini sections executable by default.
                    GAS does so, too, and musl relies on it. */
-                if (!strcmp(sname, ".init") || !strcmp(sname, ".fini"))
+                if (!strcmp(sname, ".init")
+                 || !strcmp(sname, ".fini")
+                 || !strncmp(sname, ".text", 5) /* for i386 linux kernel */
+                    )
                     flags |= SHF_EXECINSTR;
 	        cur_text_section->sh_flags = flags;
             }
+            //tcc_warning("section %s %04x", cur_text_section->name,  cur_text_section->sh_flags);
         }
         break;
     case TOK_ASMDIR_previous:
