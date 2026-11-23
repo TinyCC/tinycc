@@ -1,11 +1,11 @@
 #include <stdio.h>
 
 typedef const volatile int Array2x3[2][3];
-_Optional int *const restrict crpoi;
+volatile int *const restrict crpvi;
 
-_Static_assert(__builtin_types_compatible_p(typeof_unqual(crpoi) *, _Optional int **),
+_Static_assert(__builtin_types_compatible_p(typeof_unqual(crpvi) *, volatile int **),
                "pointer loses const and restrict and retains its target type");
-_Static_assert(__builtin_types_compatible_p(__typeof_unqual__(_Optional _Atomic int) *, int *),
+_Static_assert(__builtin_types_compatible_p(__typeof_unqual__(const _Atomic int) *, int *),
                "scalar result is non-atomic and unqualified");
 _Static_assert(__builtin_types_compatible_p(typeof_unqual(Array2x3) *, int (*)[2][3]),
                "array retains its dimensions and has unqualified elements");

@@ -99,11 +99,9 @@ endif
 60_errors_and_warnings.test : FLAGS += -dt
 96_nodata_wanted.test : FLAGS += -dt
 139_arm64_errors.test : FLAGS += -dt
-155_optional_errors.test : FLAGS += -dt
-157_null_to_nonoptional.test : FLAGS += -dt
 158_const_member_assignment.test : FLAGS += -dt
-154_optional.test 156_typeof_unqual.test : FLAGS += -Wall -Werror
-154_optional.test 156_typeof_unqual.test : GEN = $(GEN-TCC)
+156_typeof_unqual.test : FLAGS += -Wall -Werror
+156_typeof_unqual.test : GEN = $(GEN-TCC)
 
 GEN-ALWAYS =
 # GEN-ALWAYS += 95_bitfields.expect # does not work

@@ -322,14 +322,6 @@ Warn about implicit function declaration (missing prototype).
 @item -Wdiscarded-qualifiers
 Warn when const is dropped.
 
-@item -Wnull-to-nonoptional
-Warn when a null pointer constant is implicitly converted to a pointer
-whose referenced type is not @code{_Optional}-qualified.  This includes
-null arms of conditional expressions, using the eventual destination type.
-Explicit pointer casts suppress pending warnings from conditional arms.
-Casts forming null pointer constants, such as @code{(void *)0}, are still
-checked when implicitly converted.  Disabled by default.
-
 @item -Wunsupported
 Warn about unsupported GCC features that are ignored by TCC.
 
@@ -701,19 +693,6 @@ The single-argument form @code{_Static_assert(expr)} (C23) is also
 supported.
 
 @item @code{_Atomic} type qualifier for atomic types.
-
-@item @code{_Optional} type qualifier as specified by draft ISO/IEC TS
-26716 (WG14 document N3951).  Optional qualification is tracked at every
-type level and participates in the standard qualifier and conversion
-rules.  TCC does not perform flow-sensitive analysis to determine whether
-an optional object is present.
-
-The qualifier applies to the referenced type: a pointer is not
-optional merely because it can have a null value, any more
-than a pointer is @code{const} merely because it can reference an
-immutable object. A null pointer value can be copied, printed or
-converted, whereas an optional pointer object has neither value nor
-storage when the pointer through which it would be accessed is null.
 
 @item @code{_Thread_local} storage-class specifier for thread-local
 storage.  The GCC extension @code{__thread} is also supported.
