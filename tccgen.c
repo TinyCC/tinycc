@@ -8558,12 +8558,32 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
                 if (!has_init)
                     sec->sh_type = SHT_NOBITS;
             }
+        } else if (has_init && sec->sh_type == SHT_NOBITS) {
+            /* the section's first object had no initializer (a tentative
+               definition: the kernel's "static __videocard video_vga;"
+               before its initialized definition), so it became NOBITS;
+               an initialized object makes it PROGBITS again, with the
+               bytes of what was allocated so far */
+            sec->sh_type = SHT_PROGBITS;
+            section_realloc(sec, sec->data_offset);
         }
 
 #ifdef CONFIG_TCC_BCHECK
         if (bcheck)
             size = size + 1; /* add padding */
 #endif
+        if (sec && v && ad->section) {
+            /* a tentative definition in the same named section that is
+               still the last object there: the definition takes its place
+               (otherwise the kernel's "static __videocard x; ... static
+               __videocard x = {..}" would leave a zeroed copy in the
+               .videocards table) */
+            Sym *ps = sym_find(v);
+            ElfSym *es;
+            if (ps && ps->c && !(ps->type.t & VT_EXTERN) && (es = elfsym(ps))
+                && es->st_shndx == sec->sh_num && es->st_value + es->st_size == sec->data_offset)
+                sec->data_offset = es->st_value;
+        }
         if (sec) {
 	    addr = section_add(sec, size, align);
         } else {
