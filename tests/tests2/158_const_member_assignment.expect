@@ -20,6 +20,7 @@
 158_const_member_assignment.c:50: warning: assignment of read-only location
 
 [test_initialisation]
+158_const_member_assignment.c:58: warning: assignment of read-only location
 
 [test_pointer_to_const]
 

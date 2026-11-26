@@ -3596,7 +3596,7 @@ static inline CType *pointed_type(CType *type)
 }
 
 /* Copy shared array nodes before changing the element qualifiers. */
-static CType *qualifier_type(CType *type)
+static CType *copy_type_refs(CType *type)
 {
     while (type->t & VT_ARRAY_MASK) {
         type->ref = sym_push(SYM_FIELD, &type->ref->type, 0, type->ref->c);
@@ -3642,6 +3642,22 @@ static void cast_error(CType *st, CType *dt)
     type_incompatibility_error(st, dt, "cannot convert '%s' to '%s'");
 }
 
+static int has_const_member(CType *type)
+{
+    Sym *s, *f;
+    if (type->t & VT_ARRAY)
+        return has_const_member(pointed_type(type));
+    if ((type->t & VT_BTYPE) != VT_STRUCT)
+        return 0;
+    s = type->ref;
+    for (f = s->next; f; f = f->next) {
+        if ((type_qualifiers(&f->type) & VT_CONSTANT)
+            || has_const_member(&f->type))
+            return 1;
+    }
+    return 0;
+}
+
 /* verify type compatibility to store vtop in 'dt' type */
 static void verify_assign_cast(CType *dt)
 {
@@ -3651,8 +3667,11 @@ static void verify_assign_cast(CType *dt)
     st = &vtop->type; /* source type */
     dbt = dt->t & VT_BTYPE;
     sbt = st->t & VT_BTYPE;
-    if (dt->t & VT_CONSTANT)
+    if ((dt->t & VT_CONSTANT)
+        || (dbt == VT_STRUCT && has_const_member(dt))
+        )
         tcc_warning("assignment of read-only location");
+
     switch(dbt) {
     case VT_VOID:
         if (sbt != dbt)
@@ -4764,7 +4783,7 @@ static void sym_to_attr(AttributeDef *ad, Sym *s)
    are added to the element type, copied because it could be a typedef. */
 static void parse_btype_qualify(CType *type, int qualifiers)
 {
-    type = qualifier_type(type);
+    type = copy_type_refs(type);
     type->t |= qualifiers;
 }
 
@@ -4985,7 +5004,7 @@ static int parse_btype(CType *type, AttributeDef *ad, int ignore_label)
                 tcc_error("typeof applied to a bit-field");
             if ((n == TOK_TYPEOF_UNQUAL1 || n == TOK_TYPEOF_UNQUAL2)
                 && type_qualifiers(&type1))
-                qualifier_type(&type1)->t &= ~VT_QUAL;
+                copy_type_refs(&type1)->t &= ~VT_QUAL;
             /* remove all storage modifiers except typedef */
             type1.t &= ~(VT_STORAGE&~VT_TYPEDEF);
             if (type1.ref) {
@@ -5058,13 +5077,6 @@ static inline void convert_parameter_type(CType *pt)
     if ((pt->t & VT_BTYPE) == VT_FUNC) {
         mk_pointer(pt);
     }
-}
-
-/* apply the conversions required for an expression value */
-static inline void convert_expression_type(CType *pt)
-{
-    pt->t &= ~VT_QUAL;
-    convert_parameter_type(pt);
 }
 
 ST_FUNC CString* parse_asm_str(void)
@@ -6125,7 +6137,8 @@ ST_FUNC void unary(void)
         next();
 	skip('(');
 	expr_type(&controlling_type, expr_eq);
-	convert_expression_type(&controlling_type);
+        controlling_type.t &= ~VT_QUAL;
+	convert_parameter_type(&controlling_type);
 
         nocode_wanted = saved_nocode_wanted;
 
@@ -6806,28 +6819,6 @@ static void expr_cond(void)
     }
 }
 
-static int has_const_member(CType *type)
-{
-    Sym *s, *f;
-
-    if (type->t & VT_ARRAY)
-        return has_const_member(pointed_type(type));
-    if ((type->t & VT_BTYPE) != VT_STRUCT)
-        return 0;
-    s = type->ref;
-    if (s->a.const_members)
-        return s->a.const_members == 2;
-    for (f = s->next; f; f = f->next) {
-        if ((type_qualifiers(&f->type) & VT_CONSTANT)
-            || has_const_member(&f->type)) {
-            s->a.const_members = 2;
-            return 1;
-        }
-    }
-    s->a.const_members = 1;
-    return 0;
-}
-
 static void expr_eq(void)
 {
     int t;
@@ -6843,10 +6834,6 @@ static void expr_eq(void)
             expr_eq();
             gen_op(TOK_ASSIGN_OP(t));
         }
-        if ((vtop[-1].type.t & VT_BTYPE) == VT_STRUCT
-            && !(vtop[-1].type.t & VT_CONSTANT)
-            && has_const_member(&vtop[-1].type))
-            tcc_warning("assignment of read-only location");
         vstore();
     }
 }
@@ -6862,7 +6849,8 @@ ST_FUNC void gexpr(void)
         } while (tok == ',');
 
         /* convert array & function to pointer */
-        convert_expression_type(&vtop->type);
+        vtop->type.t &= ~VT_QUAL;
+        convert_parameter_type(&vtop->type);
 
         /* make builtin_constant_p((1,2)) return 0 (like on gcc) */
         if ((vtop->r & VT_VALMASK) == VT_CONST && nocode_wanted && !CONST_WANTED)
