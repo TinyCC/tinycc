@@ -2417,7 +2417,7 @@ static int layout_sections(TCCState *s1, int *sec_order, struct dyn_inf *d)
     Section *s;
     addr_t addr, tmp, align, s_align, base;
     ElfW(Phdr) *ph = NULL, *ph2;
-    int i, f, n, phnum, phfill;
+    int i, f, n, phnum, phfill, execstack;
     int file_offset;
 
     /* compute number of program headers */
@@ -2436,6 +2436,8 @@ static int layout_sections(TCCState *s1, int *sec_order, struct dyn_inf *d)
         d->ehfr = phnum++;
     if (d->relro)
         d->relro = phnum++;
+    if (s1->seen_execstack)
+        execstack = phnum++;
     d->phnum = phnum;
     d->phdr = tcc_mallocz(phnum * sizeof(ElfW(Phdr)));
 
@@ -2552,6 +2554,12 @@ static int layout_sections(TCCState *s1, int *sec_order, struct dyn_inf *d)
         fill_phdr(&d->phdr[d->ehfr], PT_GNU_EH_FRAME, eh_frame_hdr_section);
     if (d->interp)
         fill_phdr(&d->phdr[1], PT_INTERP, d->interp);
+    if (execstack) {
+        fill_phdr(&d->phdr[execstack], PT_GNU_STACK, NULL);
+        d->phdr[execstack].p_flags =
+            PF_R | PF_W | (s1->seen_execstack & SHF_EXECINSTR ? PF_X : 0);
+        d->phdr[execstack].p_align = 16;
+    }
     if (phfill) {
         ph = &d->phdr[0];
         ph->p_offset = sizeof(ElfW(Ehdr));
@@ -3447,6 +3455,9 @@ invalid:
             ptr = s->data + offset;
             full_read(fd, ptr, size);
         }
+        if (!strcmp(sh_name, ".note.GNU-stack"))
+            s1->seen_execstack |=
+                SHF_ALLOC | (s->sh_flags & (SHF_WRITE|SHF_EXECINSTR));
 #if defined TCC_TARGET_ARM || defined TCC_TARGET_ARM64 || defined TCC_TARGET_RISCV64
         /* align code sections to instruction lenght */
         /* This is needed if we compile a c file after this */

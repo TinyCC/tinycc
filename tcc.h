@@ -935,6 +935,7 @@ struct TCCState {
     #define qrel s1->qrel
 
     addr_t tls_start, tls_end;
+    int seen_execstack;
 
 #ifdef TCC_TARGET_RISCV64
     struct pcrel_hi { addr_t addr, val; } **pcrel_hi_entries;
