@@ -8555,6 +8555,8 @@ static void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
             /* XXX: DWIM logic: set section flags according to first usage */
             if (!is_const) {
                 sec->sh_flags |= SHF_WRITE;
+                if (!has_init)
+                    sec->sh_type = SHT_NOBITS;
             }
         }
 
