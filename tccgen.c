@@ -2924,24 +2924,30 @@ static int array_bound_rank(CType *type)
 
 /* Combine bounds along compatible pointer and array types. Each level
    may get its bound from a different operand. */
-static CType composite_array_bounds(CType *a, CType *b)
+static CType *composite_array_bounds(CType *ret, CType *a, CType *b)
 {
-    CType type, elem;
+    CType ct, *e;
 
-    if (a->ref == b->ref || (a->t & VT_BTYPE) != VT_PTR
-        || (b->t & VT_BTYPE) != VT_PTR)
-        return *b;
+    if (a->ref == b->ref
+        || (a->t & VT_BTYPE) != VT_PTR
+        || (b->t & VT_BTYPE) != VT_PTR
+        ) {
+        *ret = *b;
+        return ret;
+    }
+
     if ((a->t & VT_ARRAY_MASK) && (b->t & VT_ARRAY_MASK)
         && array_bound_rank(a) > array_bound_rank(b)) {
         CType *tmp = a;
         a = b;
         b = tmp;
     }
-    type = *b;
-    elem = composite_array_bounds(pointed_type(a), pointed_type(b));
-    if (elem.t != b->ref->type.t || elem.ref != b->ref->type.ref)
-        type.ref = sym_push(SYM_FIELD, &elem, 0, b->ref->c);
-    return type;
+
+    *ret = *b;
+    e = composite_array_bounds(&ct, pointed_type(a), pointed_type(b));
+    if (e->t != b->ref->type.t || e->ref != b->ref->type.ref)
+        ret->ref = sym_push(SYM_FIELD, e, 0, b->ref->c);
+    return ret;
 }
 
 #define CMP_OP 'C'
@@ -3007,16 +3013,22 @@ static int combine_types(CType *dest, SValue *op1, SValue *op2, int op)
                      : "pointer type mismatch in comparison('%s' and '%s')");
             }
             if (op == '?') {
-                CType target;
-                int quals = type_qualifiers(pt1) | type_qualifiers(pt2);
+                CType *pt, ct; int quals;
 
+                quals = type_qualifiers(pt1) | type_qualifiers(pt2);
                 type = *((pbt1 == VT_VOID) ? type1 : type2);
-                target = compatible ? composite_array_bounds(pt1, pt2)
-                                    : *pointed_type(&type);
-                if (quals & ~type_qualifiers(&target))
-                    parse_btype_qualify(&target, quals);
-                if (target.t != type.ref->type.t || target.ref != type.ref->type.ref)
-                    type.ref = sym_push(SYM_FIELD, &target, 0, type.ref->c);
+
+                if (compatible)
+                    pt = composite_array_bounds(&ct, pt1, pt2);
+                else
+                    pt = pointed_type(&type);
+
+                if (quals & ~type_qualifiers(pt))
+                    parse_btype_qualify(pt, quals);
+
+                if (pt->t != type.ref->type.t
+                 || pt->ref != type.ref->type.ref)
+                    type.ref = sym_push(SYM_FIELD, pt, 0, type.ref->c);
             }
         }
         if (op == CMP_OP)
