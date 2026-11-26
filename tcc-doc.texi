@@ -669,9 +669,7 @@ is the same as writing
 emitted at the end of the compilation unit only if used.  The behavior
 of @code{extern inline} depends on @option{-fgnu89-inline} (@pxref{Invoke}).
 
-@item @code{restrict} type qualifier. TCC retains the qualifier and checks
-that it is applied only to pointers to object or incomplete types. It is not
-currently used for alias analysis or optimization.
+@item @code{restrict} keyword is ignored.
 @end itemize
 
 @section ISO C11 extensions

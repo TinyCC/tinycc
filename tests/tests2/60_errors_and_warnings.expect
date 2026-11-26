@@ -297,26 +297,17 @@ bar 15 12 34
 60_errors_and_warnings.c:678: warning: assignment of read-only location
 60_errors_and_warnings.c:679: warning: assignment of read-only location
 
-[test_restrict_scalar]
-60_errors_and_warnings.c:684: error: restrict-qualified type must be a pointer to object or incomplete type
-
-[test_restrict_function_pointer]
-60_errors_and_warnings.c:688: error: restrict-qualified type must be a pointer to object or incomplete type
-
-[test_discarded_restrict]
-60_errors_and_warnings.c:699: warning: assignment discards qualifiers from pointer target type
-
 [test_ptr_to_double]
-60_errors_and_warnings.c:705: error: cannot convert 'char [4]' to 'double'
+60_errors_and_warnings.c:686: error: cannot convert 'char [4]' to 'double'
 
 [test_ptr_to_double_explicit]
-60_errors_and_warnings.c:713: error: cannot convert 'char [4]' to 'double'
+60_errors_and_warnings.c:694: error: cannot convert 'char [4]' to 'double'
 
 [test_funcptr_to_double]
-60_errors_and_warnings.c:723: error: cannot convert 'int ()' to 'double'
+60_errors_and_warnings.c:704: error: cannot convert 'int ()' to 'double'
 
 [test_const_vla_typedef]
-60_errors_and_warnings.c:731: warning: assignment of read-only location
+60_errors_and_warnings.c:712: warning: assignment of read-only location
 
 [test_typeof_unqual_bitfield]
-60_errors_and_warnings.c:737: error: typeof applied to a bit-field
+60_errors_and_warnings.c:718: error: typeof applied to a bit-field

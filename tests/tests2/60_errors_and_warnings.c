@@ -679,25 +679,6 @@ void test(void)
     (1 ? vap : cap)[0][0][0] = 4;
 }
 
-#elif defined test_restrict_scalar
-
-restrict int object;
-
-#elif defined test_restrict_function_pointer
-
-int (*restrict function_pointer)(void);
-
-#elif defined test_discarded_restrict
-
-typedef int *restrict restricted_pointer;
-
-restricted_pointer *source;
-int **destination;
-
-void test(void)
-{
-    destination = source;
-}
 #elif defined test_ptr_to_double
 
 int main(void)
