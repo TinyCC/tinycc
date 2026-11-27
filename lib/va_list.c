@@ -3,7 +3,9 @@
 #if defined __x86_64__
 
 /* Avoid include files, they may not be available when cross compiling */
-extern void abort(void);
+/* Also avoid reference to libc */
+/* extern void abort(void); */
+#define abort() (*(void**)0 = 0)
 
 /* This should be in sync with our include/stdarg.h */
 enum __va_arg_type {

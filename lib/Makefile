@@ -53,10 +53,10 @@ Cbc = $(Cbt)$(subst yes,,$(CONFIG_bcheck))
 $(Nat)COMMON_O += runmain.o tcov.o
 $(Cbt)COMMON_O += bt-exe.o bt-log.o
 $(Cbt)WIN_O += bt-dll.o
-$(Cbc)COMMON_O += bcheck.o bcheck_run.o
+$(Cbc)COMMON_O += bcheck.o
 
 # not in libtcc1.a
-EXTRA_O = runmain.o bt-exe.o bt-dll.o bt-log.o bcheck.o bcheck_run.o
+EXTRA_O = runmain.o bt-exe.o bt-dll.o bt-log.o bcheck.o
 
 OBJ-i386 = $(I386_O) pic86.o $(LIN_O)
 OBJ-x86_64 = $(X86_64_O) va_list.o $(LIN_O)
@@ -95,8 +95,6 @@ $(TOP)/%.o : %.c $(TCC)
 	$S$(XCC) -c $< -o $@ $(XFLAGS)
 
 $(TOP)/bcheck.o : XFLAGS += $(BFLAGS)
-$(TOP)/bcheck_run.o : bcheck.c $(TCC)
-	$S$(XCC) -c bcheck.c -o $@ $(XFLAGS)  $(BFLAGS) -DBCHECK_RUN
 
 $(X)crt1w.o : crt1.c
 $(X)wincrt1w.o : wincrt1.c

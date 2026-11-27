@@ -2131,12 +2131,8 @@ static void pe_add_runtime(TCCState *s1, struct pe_info *pe)
 #ifdef CONFIG_TCC_BACKTRACE
     if (s1->do_backtrace) {
 #ifdef CONFIG_TCC_BCHECK
-        if (s1->do_bounds_check && s1->output_type != TCC_OUTPUT_DLL) {
-	    if (s1->output_type == TCC_OUTPUT_MEMORY)
-                tcc_add_support(s1, "bcheck_run.o");
-	    else
-                tcc_add_support(s1, "bcheck.o");
-	}
+        if (s1->do_bounds_check && s1->output_type != TCC_OUTPUT_DLL)
+            tcc_add_support(s1, "bcheck.o");
 #endif
         if (s1->output_type == TCC_OUTPUT_EXE)
             tcc_add_support(s1, "bt-exe.o");

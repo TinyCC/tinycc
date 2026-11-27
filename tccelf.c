@@ -1839,10 +1839,7 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
 
 #ifdef CONFIG_TCC_BCHECK
         if (s1->do_bounds_check && s1->output_type != TCC_OUTPUT_DLL) {
-	    if (s1->output_type == TCC_OUTPUT_MEMORY)
-                tcc_add_support(s1, "bcheck_run.o");
-	    else
-                tcc_add_support(s1, "bcheck.o");
+            tcc_add_support(s1, "bcheck.o");
 # if !(TARGETOS_OpenBSD || TARGETOS_NetBSD)
             tcc_add_library(s1, "dl");
 # endif
@@ -1873,10 +1870,8 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
 #if defined TCC_TARGET_ARM && TARGETOS_FreeBSD
         tcc_add_library(s1, "gcc_s"); // unwind code
 #endif
-        if (TCC_LIBTCC1[0]) {
+        if (TCC_LIBTCC1[0])
             tcc_add_support(s1, TCC_LIBTCC1);
-            tcc_add_library(s1, "c");
-        }
 #ifndef TCC_TARGET_MACHO
         if (s1->output_type != TCC_OUTPUT_MEMORY)
             tccelf_add_crtend(s1);
@@ -2417,7 +2412,7 @@ static int layout_sections(TCCState *s1, int *sec_order, struct dyn_inf *d)
     Section *s;
     addr_t addr, tmp, align, s_align, base;
     ElfW(Phdr) *ph = NULL, *ph2;
-    int i, f, n, phnum, phfill, execstack;
+    int i, f, n, phnum, phfill, execstack = 0;
     int file_offset;
 
     /* compute number of program headers */
@@ -2555,10 +2550,9 @@ static int layout_sections(TCCState *s1, int *sec_order, struct dyn_inf *d)
     if (d->interp)
         fill_phdr(&d->phdr[1], PT_INTERP, d->interp);
     if (execstack) {
-        fill_phdr(&d->phdr[execstack], PT_GNU_STACK, NULL);
-        d->phdr[execstack].p_flags =
-            PF_R | PF_W | (s1->seen_execstack & SHF_EXECINSTR ? PF_X : 0);
-        d->phdr[execstack].p_align = 16;
+        ph = fill_phdr(&d->phdr[execstack], PT_GNU_STACK, NULL);
+        ph->p_flags = PF_R | PF_W | (s1->seen_execstack & SHF_EXECINSTR ? PF_X : 0);
+        ph->p_align = 16;
     }
     if (phfill) {
         ph = &d->phdr[0];
